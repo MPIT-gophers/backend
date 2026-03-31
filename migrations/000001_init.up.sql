@@ -28,8 +28,7 @@ CREATE TABLE IF NOT EXISTS events (
     city VARCHAR(255) NOT NULL,
     event_date DATE NOT NULL,
     event_time TIME NOT NULL,
-    scale INTEGER NOT NULL CHECK (scale > 0),
-    energy VARCHAR(100) NOT NULL,
+    expected_guest_count INTEGER NOT NULL CHECK (expected_guest_count > 0),
     budget NUMERIC(12,2) NOT NULL CHECK (budget >= 0),
 
     title VARCHAR(255),
@@ -67,7 +66,7 @@ CREATE TABLE IF NOT EXISTS event_users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    UNIQUE (event_id, user_id, role)
+    UNIQUE (event_id, user_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_users_event_id ON event_users(event_id);
