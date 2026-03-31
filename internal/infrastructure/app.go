@@ -23,15 +23,59 @@ type App struct {
 
 func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, error) {
 	if cfg.Postgres.AutoMigrate {
+		logger.Info("postgres migrations started",
+			slog.String("direction", "up"),
+			slog.String("db_host", cfg.Postgres.Host),
+			slog.Int("db_port", cfg.Postgres.Port),
+			slog.String("db_name", cfg.Postgres.DBName),
+			slog.String("migrations_path", cfg.Postgres.MigrationsPath),
+		)
 		if err := database.RunMigrations(cfg.Postgres, "up"); err != nil {
+			logger.Error("postgres migrations failed",
+				slog.Any("error", err),
+				slog.String("direction", "up"),
+				slog.String("db_host", cfg.Postgres.Host),
+				slog.Int("db_port", cfg.Postgres.Port),
+				slog.String("db_name", cfg.Postgres.DBName),
+			)
 			return nil, fmt.Errorf("auto migrate: %w", err)
 		}
+		logger.Info("postgres migrations completed",
+			slog.String("direction", "up"),
+			slog.String("db_host", cfg.Postgres.Host),
+			slog.Int("db_port", cfg.Postgres.Port),
+			slog.String("db_name", cfg.Postgres.DBName),
+		)
+	} else {
+		logger.Info("postgres migrations skipped",
+			slog.Bool("auto_migrate", false),
+			slog.String("db_host", cfg.Postgres.Host),
+			slog.Int("db_port", cfg.Postgres.Port),
+			slog.String("db_name", cfg.Postgres.DBName),
+		)
 	}
 
+	logger.Info("postgres connection started",
+		slog.String("db_host", cfg.Postgres.Host),
+		slog.Int("db_port", cfg.Postgres.Port),
+		slog.String("db_name", cfg.Postgres.DBName),
+		slog.Int64("max_conns", int64(cfg.Postgres.MaxConns)),
+	)
 	db, err := database.NewPool(ctx, cfg.Postgres)
 	if err != nil {
+		logger.Error("postgres connection failed",
+			slog.Any("error", err),
+			slog.String("db_host", cfg.Postgres.Host),
+			slog.Int("db_port", cfg.Postgres.Port),
+			slog.String("db_name", cfg.Postgres.DBName),
+		)
 		return nil, err
 	}
+	logger.Info("postgres connection established",
+		slog.String("db_host", cfg.Postgres.Host),
+		slog.Int("db_port", cfg.Postgres.Port),
+		slog.String("db_name", cfg.Postgres.DBName),
+	)
 
 	httpRouter, err := router.New(cfg, logger, db)
 	if err != nil {
