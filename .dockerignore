@@ -1,0 +1,8 @@
+.git
+.gitignore
+.env
+.cache
+.gomodcache
+bin
+dist
+

@@ -1,0 +1,73 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"eventAI/internal/adapters/logging"
+	"eventAI/internal/config"
+	infra "eventAI/internal/infrastructure"
+	"eventAI/internal/infrastructure/database"
+)
+
+func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("load config", slog.Any("error", err))
+		os.Exit(1)
+	}
+
+	logger, err := logging.New(cfg.App.Name, cfg.App.Env, cfg.Log.Level)
+	if err != nil {
+		slog.Error("init logger", slog.Any("error", err))
+		os.Exit(1)
+	}
+
+	if err := run(context.Background(), cfg, logger, os.Args[1:]); err != nil {
+		logger.Error("application stopped with error", slog.Any("error", err))
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context, cfg config.Config, logger *slog.Logger, args []string) error {
+	if len(args) > 0 && args[0] == "migrate" {
+		direction := "up"
+		if len(args) > 1 {
+			direction = args[1]
+		}
+
+		return database.RunMigrations(cfg.Postgres, direction)
+	}
+
+	app, err := infra.New(ctx, cfg, logger)
+	if err != nil {
+		return err
+	}
+	defer app.Close()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- app.Run()
+	}()
+
+	signalCtx, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case err := <-serverErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	case <-signalCtx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return app.Shutdown(shutdownCtx)
+	}
+}
