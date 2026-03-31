@@ -16,6 +16,17 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: mpit2026-reg-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   app:
     build:
       context: .
@@ -36,4 +47,5 @@ services:
 
 volumes:
   postgres_data:
+    name: mpit2026-reg-postgres-data
 

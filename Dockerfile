@@ -18,6 +18,7 @@ RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /out/server /app/server
 COPY migrations /app/migrations
 COPY swag /app/swag
+COPY configs /app/configs
 COPY .env.example /app/.env.example
 
 EXPOSE 8080

@@ -223,6 +223,81 @@ FROM event_variants
 WHERE event_id = sqlc.arg(event_id)
 ORDER BY variant_number;
 
+-- name: GetEventInviteByEventID :one
+SELECT token
+FROM event_invites
+WHERE event_id = sqlc.arg(event_id)
+  AND is_active = TRUE
+  AND (expires_at IS NULL OR expires_at > NOW())
+LIMIT 1;
+
+-- name: ListEventGuests :many
+SELECT
+    id,
+    event_id,
+    user_id,
+    full_name,
+    phone,
+    approval_status,
+    attendance_status,
+    plus_one_count,
+    created_at
+FROM event_guests
+WHERE event_id = sqlc.arg(event_id)
+  AND (sqlc.narg(approval_status)::text IS NULL OR approval_status = sqlc.narg(approval_status)::text)
+ORDER BY created_at ASC;
+
+-- name: UpdateGuestApprovalStatus :one
+UPDATE event_guests
+SET
+    approval_status     = sqlc.arg(approval_status),
+    approved_by_user_id = sqlc.arg(approved_by_user_id),
+    approved_at         = NOW(),
+    updated_at          = NOW()
+WHERE id = sqlc.arg(id)
+  AND event_id = sqlc.arg(event_id)
+RETURNING
+    id,
+    event_id,
+    user_id,
+    full_name,
+    phone,
+    approval_status,
+    attendance_status,
+    plus_one_count,
+    created_at;
+
+-- name: UpdateGuestAttendanceStatus :one
+UPDATE event_guests
+SET
+    attendance_status = sqlc.arg(attendance_status),
+    responded_at      = NOW(),
+    updated_at        = NOW()
+WHERE id = sqlc.arg(id)
+  AND event_id = sqlc.arg(event_id)
+  AND approval_status = 'approved'
+RETURNING
+    id,
+    event_id,
+    user_id,
+    full_name,
+    phone,
+    approval_status,
+    attendance_status,
+    plus_one_count,
+    created_at;
+
+-- name: GetEventGuestStats :one
+SELECT
+    COUNT(*) FILTER (WHERE approval_status = 'pending')                                    AS pending_approval,
+    COUNT(*) FILTER (WHERE approval_status = 'approved')                                   AS approved,
+    COUNT(*) FILTER (WHERE approval_status = 'rejected')                                   AS rejected,
+    COUNT(*) FILTER (WHERE approval_status = 'approved' AND attendance_status = 'pending') AS attendance_pending,
+    COUNT(*) FILTER (WHERE attendance_status = 'confirmed')                                AS confirmed,
+    COUNT(*) FILTER (WHERE attendance_status = 'declined')                                 AS declined
+FROM event_guests
+WHERE event_id = sqlc.arg(event_id);
+
 -- name: ListEventLocationsByEventID :many
 SELECT
     id,

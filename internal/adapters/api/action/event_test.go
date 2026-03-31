@@ -132,6 +132,17 @@ type stubEventRepository struct {
 	joinResult   core.Event
 	getResult    core.Event
 	roleResult   string
+
+	inviteTokenResult      string
+	inviteTokenErr         error
+	listGuestsResult      []core.EventGuest
+	listGuestsErr         error
+	updateApprovalResult      core.EventGuest
+	updateApprovalErr         error
+	updateAttendanceResult     core.EventGuest
+	updateAttendanceErr        error
+	guestStatsResult      core.EventGuestStats
+	guestStatsErr         error
 }
 
 func (s *stubEventRepository) Create(_ context.Context, _ repo.CreateEventParams) (core.Event, error) {
@@ -152,4 +163,101 @@ func (s *stubEventRepository) GetByID(_ context.Context, _ string) (core.Event, 
 
 func (s *stubEventRepository) GetAccessRole(_ context.Context, _ string, _ string) (string, error) {
 	return s.roleResult, nil
+}
+
+func (s *stubEventRepository) GetInviteToken(_ context.Context, _ string) (string, error) {
+	return s.inviteTokenResult, s.inviteTokenErr
+}
+
+func (s *stubEventRepository) ListGuests(_ context.Context, _ string, _ *string) ([]core.EventGuest, error) {
+	return s.listGuestsResult, s.listGuestsErr
+}
+
+func (s *stubEventRepository) UpdateGuestApprovalStatus(_ context.Context, _ repo.UpdateGuestApprovalParams) (core.EventGuest, error) {
+	return s.updateApprovalResult, s.updateApprovalErr
+}
+
+func (s *stubEventRepository) UpdateGuestAttendanceStatus(_ context.Context, _ repo.UpdateGuestAttendanceParams) (core.EventGuest, error) {
+	return s.updateAttendanceResult, s.updateAttendanceErr
+}
+
+func (s *stubEventRepository) GetGuestStats(_ context.Context, _ string) (core.EventGuestStats, error) {
+	return s.guestStatsResult, s.guestStatsErr
+}
+
+func TestEventHandlerGetInviteSuccess(t *testing.T) {
+	t.Parallel()
+
+	handler := NewEventHandler(service.NewEventService(&stubEventRepository{
+		roleResult: "organizer",
+		inviteTokenResult: "invite-123",
+	}))
+
+	wrapped := middleware.Auth(func(token string) (string, error) {
+		return "user-1", nil
+	})(http.HandlerFunc(handler.GetInvite))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/events/event-1/invite", nil)
+	req.Header.Set("Authorization", "Bearer good-token")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("eventID", "event-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rec := httptest.NewRecorder()
+	wrapped.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestEventHandlerJoinByTokenSuccess(t *testing.T) {
+	t.Parallel()
+
+	handler := NewEventHandler(service.NewEventService(&stubEventRepository{
+		joinResult: core.Event{ID: "event-2", Status: "published"},
+	}))
+
+	wrapped := middleware.Auth(func(token string) (string, error) {
+		return "user-2", nil
+	})(http.HandlerFunc(handler.JoinByToken))
+
+	body := bytes.NewBufferString(`{"token":"invite-123"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/events/join-by-token", body)
+	req.Header.Set("Authorization", "Bearer good-token")
+
+	rec := httptest.NewRecorder()
+	wrapped.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestEventHandlerUpdateGuestStatusSuccess(t *testing.T) {
+	t.Parallel()
+
+	handler := NewEventHandler(service.NewEventService(&stubEventRepository{
+		roleResult: "organizer",
+		updateApprovalResult: core.EventGuest{ID: "guest-1", ApprovalStatus: "approved"},
+	}))
+
+	wrapped := middleware.Auth(func(token string) (string, error) {
+		return "user-1", nil
+	})(http.HandlerFunc(handler.UpdateGuestStatus))
+
+	body := bytes.NewBufferString(`{"approval_status":"approved"}`)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/events/event-1/guests/guest-1/status", body)
+	req.Header.Set("Authorization", "Bearer good-token")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("eventID", "event-1")
+	rctx.URLParams.Add("guestID", "guest-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rec := httptest.NewRecorder()
+	wrapped.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
 }

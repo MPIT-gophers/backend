@@ -79,6 +79,10 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 			r.Route("/events/{eventID}", func(r chi.Router) {
 				r.Use(apimiddleware.RequireEventAccess(authorizer, "read"))
 				r.Get("/", eventHandler.GetByID)
+				r.Get("/invite", eventHandler.GetInvite)
+				r.Get("/guests", eventHandler.ListGuests)
+				r.Get("/stats", eventHandler.GetGuestStats)
+				r.Patch("/guests/{guestID}/status", eventHandler.UpdateGuestStatus)
 			})
 		})
 	})
