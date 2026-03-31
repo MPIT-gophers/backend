@@ -20,10 +20,29 @@ type JoinEventByTokenParams struct {
 	Token  string
 }
 
+type UpdateGuestApprovalParams struct {
+	GuestID          string
+	EventID          string
+	ApprovalStatus   core.ApprovalStatus
+	ApprovedByUserID string
+}
+
+type UpdateGuestAttendanceParams struct {
+	GuestID          string
+	EventID          string
+	AttendanceStatus core.AttendanceStatus
+}
+
 type EventRepository interface {
 	Create(ctx context.Context, params CreateEventParams) (core.Event, error)
 	ListMine(ctx context.Context, userID string) ([]core.Event, error)
 	JoinByToken(ctx context.Context, params JoinEventByTokenParams) (core.Event, error)
 	GetByID(ctx context.Context, eventID string) (core.Event, error)
 	GetAccessRole(ctx context.Context, userID string, eventID string) (string, error)
+
+	GetInviteToken(ctx context.Context, eventID string) (string, error)
+	ListGuests(ctx context.Context, eventID string, approvalStatus *string) ([]core.EventGuest, error)
+	UpdateGuestApprovalStatus(ctx context.Context, params UpdateGuestApprovalParams) (core.EventGuest, error)
+	UpdateGuestAttendanceStatus(ctx context.Context, params UpdateGuestAttendanceParams) (core.EventGuest, error)
+	GetGuestStats(ctx context.Context, eventID string) (core.EventGuestStats, error)
 }

@@ -298,3 +298,70 @@ func uuidPtr(value pgtype.UUID) *string {
 func stringPtr(value string) *string {
 	return &value
 }
+
+func mapGuestRow(
+	id pgtype.UUID,
+	eventID pgtype.UUID,
+	userID pgtype.UUID,
+	fullName string,
+	phone *string,
+	approvalStatus string,
+	attendanceStatus string,
+	plusOneCount int32,
+	createdAt pgtype.Timestamptz,
+) core.EventGuest {
+	var uid *string
+	if userID.Valid {
+		s := userID.String()
+		uid = &s
+	}
+	return core.EventGuest{
+		ID:               id.String(),
+		EventID:          eventID.String(),
+		UserID:           uid,
+		FullName:         fullName,
+		Phone:            phone,
+		ApprovalStatus:   core.ApprovalStatus(approvalStatus),
+		AttendanceStatus: core.AttendanceStatus(attendanceStatus),
+		PlusOneCount:     int(plusOneCount),
+		CreatedAt:        timestamptzToTime(createdAt),
+	}
+}
+
+func mapListEventGuestsRow(row dbsqlc.ListEventGuestsRow) core.EventGuest {
+	return mapGuestRow(
+		row.ID, row.EventID, row.UserID,
+		row.FullName, row.Phone,
+		row.ApprovalStatus, row.AttendanceStatus,
+		row.PlusOneCount, row.CreatedAt,
+	)
+}
+
+func mapUpdateGuestApprovalRow(row dbsqlc.UpdateGuestApprovalStatusRow) core.EventGuest {
+	return mapGuestRow(
+		row.ID, row.EventID, row.UserID,
+		row.FullName, row.Phone,
+		row.ApprovalStatus, row.AttendanceStatus,
+		row.PlusOneCount, row.CreatedAt,
+	)
+}
+
+func mapUpdateGuestAttendanceRow(row dbsqlc.UpdateGuestAttendanceStatusRow) core.EventGuest {
+	return mapGuestRow(
+		row.ID, row.EventID, row.UserID,
+		row.FullName, row.Phone,
+		row.ApprovalStatus, row.AttendanceStatus,
+		row.PlusOneCount, row.CreatedAt,
+	)
+}
+
+func mapGuestStatsRow(row dbsqlc.GetEventGuestStatsRow) core.EventGuestStats {
+	return core.EventGuestStats{
+		PendingApproval:   int(row.PendingApproval),
+		Approved:          int(row.Approved),
+		Rejected:          int(row.Rejected),
+		AttendancePending: int(row.AttendancePending),
+		Confirmed:         int(row.Confirmed),
+		Declined:          int(row.Declined),
+	}
+}

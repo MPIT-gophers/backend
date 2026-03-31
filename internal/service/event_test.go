@@ -117,6 +117,141 @@ func TestEventServiceListMineRejectsUnauthorizedUser(t *testing.T) {
 	}
 }
 
+func TestEventServiceGetInviteToken(t *testing.T) {
+	t.Parallel()
+	repo := &stubEventRepository{
+		inviteTokenResult: "invite-123",
+	}
+	s := NewEventService(repo)
+
+	token, err := s.GetInviteToken(context.Background(), "event-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if token != "invite-123" {
+		t.Fatalf("got token %q, want invite-123", token)
+	}
+
+	_, err = s.GetInviteToken(context.Background(), "  ")
+	if !errors.Is(err, errorsstatus.ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestEventServiceListGuests(t *testing.T) {
+	t.Parallel()
+	repo := &stubEventRepository{
+		listGuestsResult: []core.EventGuest{{ID: "guest-1"}},
+	}
+	s := NewEventService(repo)
+
+	guests, err := s.ListGuests(context.Background(), "event-1", "approved")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(guests) != 1 || guests[0].ID != "guest-1" {
+		t.Fatalf("unexpected guests result: %+v", guests)
+	}
+	if repo.lastListGuestsFilter == nil || *repo.lastListGuestsFilter != "approved" {
+		t.Fatalf("expected filter 'approved'")
+	}
+
+	_, err = s.ListGuests(context.Background(), " ", "approved")
+	if !errors.Is(err, errorsstatus.ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput, got %v", err)
+	}
+
+	_, err = s.ListGuests(context.Background(), "event-1", "invalid_status")
+	if !errors.Is(err, errorsstatus.ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput for wrong status, got %v", err)
+	}
+}
+
+func TestEventServiceUpdateGuestStatus(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ApprovalSuccess", func(t *testing.T) {
+		repo := &stubEventRepository{
+			roleResult: "organizer",
+			updateApprovalResult: core.EventGuest{ID: "guest-1", ApprovalStatus: "approved"},
+		}
+		s := NewEventService(repo)
+
+		status := "approved"
+		guest, err := s.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{
+			ApprovalStatus: &status,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if guest.ApprovalStatus != "approved" {
+			t.Fatalf("unexpected status: %s", guest.ApprovalStatus)
+		}
+	})
+
+	t.Run("AttendanceSuccess", func(t *testing.T) {
+		repo := &stubEventRepository{
+			roleResult: "guest_approved",
+			updateAttendanceResult: core.EventGuest{ID: "guest-1", AttendanceStatus: "confirmed"},
+		}
+		s := NewEventService(repo)
+
+		status := "confirmed"
+		guest, err := s.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{
+			AttendanceStatus: &status,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if guest.AttendanceStatus != "confirmed" {
+			t.Fatalf("unexpected attendance: %s", guest.AttendanceStatus)
+		}
+	})
+
+	t.Run("InvalidInputs", func(t *testing.T) {
+		s := NewEventService(&stubEventRepository{})
+		status := "approved"
+		
+		// Missing both
+		_, err := s.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{})
+		if !errors.Is(err, errorsstatus.ErrInvalidInput) {
+			t.Fatalf("expected ErrInvalidInput, got %v", err)
+		}
+
+		// Providing both
+		_, err = s.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{
+			ApprovalStatus: &status, AttendanceStatus: &status,
+		})
+		if !errors.Is(err, errorsstatus.ErrInvalidInput) {
+			t.Fatalf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+
+	t.Run("ForbiddenRoles", func(t *testing.T) {
+		// Guest trying to approve
+		repo1 := &stubEventRepository{roleResult: "guest_approved"}
+		s1 := NewEventService(repo1)
+		status := "approved"
+		_, err := s1.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{
+			ApprovalStatus: &status,
+		})
+		if !errors.Is(err, errorsstatus.ErrForbidden) {
+			t.Fatalf("expected ErrForbidden for guest approving, got %v", err)
+		}
+
+		// Organizer trying to set attendance
+		repo2 := &stubEventRepository{roleResult: "organizer"}
+		s2 := NewEventService(repo2)
+		attStatus := "confirmed"
+		_, err = s2.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{
+			AttendanceStatus: &attStatus,
+		})
+		if !errors.Is(err, errorsstatus.ErrForbidden) {
+			t.Fatalf("expected ErrForbidden for organizer setting attendance, got %v", err)
+		}
+	})
+}
+
 type stubEventRepository struct {
 	createResult     core.Event
 	createErr        error
@@ -138,6 +273,25 @@ type stubEventRepository struct {
 	roleErr         error
 	lastRoleUserID  string
 	lastRoleEventID string
+
+	inviteTokenResult      string
+	inviteTokenErr         error
+	lastInviteTokenEventID string
+
+	listGuestsResult      []core.EventGuest
+	listGuestsErr         error
+	lastListGuestsFilter  *string
+
+	updateApprovalResult      core.EventGuest
+	updateApprovalErr         error
+	lastUpdateApprovalParams  repo.UpdateGuestApprovalParams
+
+	updateAttendanceResult     core.EventGuest
+	updateAttendanceErr        error
+	lastUpdateAttendanceParams repo.UpdateGuestAttendanceParams
+
+	guestStatsResult      core.EventGuestStats
+	guestStatsErr         error
 }
 
 func (s *stubEventRepository) Create(_ context.Context, params repo.CreateEventParams) (core.Event, error) {
@@ -164,4 +318,28 @@ func (s *stubEventRepository) GetAccessRole(_ context.Context, userID string, ev
 	s.lastRoleUserID = userID
 	s.lastRoleEventID = eventID
 	return s.roleResult, s.roleErr
+}
+
+func (s *stubEventRepository) GetInviteToken(_ context.Context, eventID string) (string, error) {
+	s.lastInviteTokenEventID = eventID
+	return s.inviteTokenResult, s.inviteTokenErr
+}
+
+func (s *stubEventRepository) ListGuests(_ context.Context, eventID string, filter *string) ([]core.EventGuest, error) {
+	s.lastListGuestsFilter = filter
+	return s.listGuestsResult, s.listGuestsErr
+}
+
+func (s *stubEventRepository) UpdateGuestApprovalStatus(_ context.Context, params repo.UpdateGuestApprovalParams) (core.EventGuest, error) {
+	s.lastUpdateApprovalParams = params
+	return s.updateApprovalResult, s.updateApprovalErr
+}
+
+func (s *stubEventRepository) UpdateGuestAttendanceStatus(_ context.Context, params repo.UpdateGuestAttendanceParams) (core.EventGuest, error) {
+	s.lastUpdateAttendanceParams = params
+	return s.updateAttendanceResult, s.updateAttendanceErr
+}
+
+func (s *stubEventRepository) GetGuestStats(_ context.Context, eventID string) (core.EventGuestStats, error) {
+	return s.guestStatsResult, s.guestStatsErr
 }

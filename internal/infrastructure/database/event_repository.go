@@ -289,6 +289,118 @@ func (r *EventRepository) loadVariants(ctx context.Context, queries *dbsqlc.Quer
 	return nil
 }
 
+func (r *EventRepository) GetInviteToken(ctx context.Context, eventID string) (string, error) {
+	id, err := parseUUID(eventID)
+	if err != nil {
+		return "", errorsstatus.ErrInvalidInput
+	}
+
+	token, err := r.queries.GetEventInviteByEventID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", errorsstatus.ErrNotFound
+		}
+		return "", err
+	}
+
+	return token, nil
+}
+
+func (r *EventRepository) ListGuests(ctx context.Context, eventID string, approvalStatus *string) ([]core.EventGuest, error) {
+	id, err := parseUUID(eventID)
+	if err != nil {
+		return nil, errorsstatus.ErrInvalidInput
+	}
+
+	rows, err := r.queries.ListEventGuests(ctx, dbsqlc.ListEventGuestsParams{
+		EventID:        id,
+		ApprovalStatus: approvalStatus,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	guests := make([]core.EventGuest, 0, len(rows))
+	for _, row := range rows {
+		guests = append(guests, mapListEventGuestsRow(row))
+	}
+
+	return guests, nil
+}
+
+func (r *EventRepository) UpdateGuestApprovalStatus(ctx context.Context, params repo.UpdateGuestApprovalParams) (core.EventGuest, error) {
+	guestID, err := parseUUID(params.GuestID)
+	if err != nil {
+		return core.EventGuest{}, errorsstatus.ErrInvalidInput
+	}
+
+	eventID, err := parseUUID(params.EventID)
+	if err != nil {
+		return core.EventGuest{}, errorsstatus.ErrInvalidInput
+	}
+
+	approvedBy, err := parseUUID(params.ApprovedByUserID)
+	if err != nil {
+		return core.EventGuest{}, errorsstatus.ErrInvalidInput
+	}
+
+	row, err := r.queries.UpdateGuestApprovalStatus(ctx, dbsqlc.UpdateGuestApprovalStatusParams{
+		ID:               guestID,
+		EventID:          eventID,
+		ApprovalStatus:   string(params.ApprovalStatus),
+		ApprovedByUserID: approvedBy,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return core.EventGuest{}, errorsstatus.ErrNotFound
+		}
+		return core.EventGuest{}, err
+	}
+
+	return mapUpdateGuestApprovalRow(row), nil
+}
+
+func (r *EventRepository) UpdateGuestAttendanceStatus(ctx context.Context, params repo.UpdateGuestAttendanceParams) (core.EventGuest, error) {
+	guestID, err := parseUUID(params.GuestID)
+	if err != nil {
+		return core.EventGuest{}, errorsstatus.ErrInvalidInput
+	}
+
+	eventID, err := parseUUID(params.EventID)
+	if err != nil {
+		return core.EventGuest{}, errorsstatus.ErrInvalidInput
+	}
+
+	row, err := r.queries.UpdateGuestAttendanceStatus(ctx, dbsqlc.UpdateGuestAttendanceStatusParams{
+		ID:               guestID,
+		EventID:          eventID,
+		AttendanceStatus: string(params.AttendanceStatus),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// ErrNoRows означает либо гость не найден, либо approval_status != 'approved'
+			return core.EventGuest{}, errorsstatus.ErrForbidden
+		}
+		return core.EventGuest{}, err
+	}
+
+	return mapUpdateGuestAttendanceRow(row), nil
+}
+
+func (r *EventRepository) GetGuestStats(ctx context.Context, eventID string) (core.EventGuestStats, error) {
+	id, err := parseUUID(eventID)
+	if err != nil {
+		return core.EventGuestStats{}, errorsstatus.ErrInvalidInput
+	}
+
+	row, err := r.queries.GetEventGuestStats(ctx, id)
+	if err != nil {
+		return core.EventGuestStats{}, err
+	}
+
+	return mapGuestStatsRow(row), nil
+}
+
 func mapEventPgError(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {

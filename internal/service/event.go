@@ -108,6 +108,100 @@ func (s *EventService) GetByID(ctx context.Context, eventID string) (core.Event,
 	return s.repo.GetByID(ctx, eventID)
 }
 
+type UpdateGuestStatusInput struct {
+	ApprovalStatus   *string
+	AttendanceStatus *string
+}
+
+func (s *EventService) GetInviteToken(ctx context.Context, eventID string) (string, error) {
+	eventID = strings.TrimSpace(eventID)
+	if eventID == "" {
+		return "", errorsstatus.ErrInvalidInput
+	}
+
+	return s.repo.GetInviteToken(ctx, eventID)
+}
+
+func (s *EventService) ListGuests(ctx context.Context, eventID string, approvalStatus string) ([]core.EventGuest, error) {
+	eventID = strings.TrimSpace(eventID)
+	if eventID == "" {
+		return nil, errorsstatus.ErrInvalidInput
+	}
+
+	var filter *string
+	if v := strings.TrimSpace(approvalStatus); v != "" {
+		switch core.ApprovalStatus(v) {
+		case core.ApprovalPending, core.ApprovalApproved, core.ApprovalRejected:
+		default:
+			return nil, errorsstatus.ErrInvalidInput
+		}
+		filter = &v
+	}
+
+	return s.repo.ListGuests(ctx, eventID, filter)
+}
+
+func (s *EventService) UpdateGuestStatus(ctx context.Context, actorID, eventID, guestID string, input UpdateGuestStatusInput) (core.EventGuest, error) {
+	actorID = strings.TrimSpace(actorID)
+	eventID = strings.TrimSpace(eventID)
+	guestID = strings.TrimSpace(guestID)
+
+	if actorID == "" || eventID == "" || guestID == "" {
+		return core.EventGuest{}, errorsstatus.ErrInvalidInput
+	}
+
+	if input.ApprovalStatus != nil && input.AttendanceStatus != nil {
+		return core.EventGuest{}, errorsstatus.ErrInvalidInput
+	}
+	if input.ApprovalStatus == nil && input.AttendanceStatus == nil {
+		return core.EventGuest{}, errorsstatus.ErrInvalidInput
+	}
+
+	role, err := s.repo.GetAccessRole(ctx, actorID, eventID)
+	if err != nil {
+		return core.EventGuest{}, err
+	}
+
+	if input.ApprovalStatus != nil {
+		if role != "organizer" && role != "co_host" {
+			return core.EventGuest{}, errorsstatus.ErrForbidden
+		}
+		status := core.ApprovalStatus(strings.TrimSpace(*input.ApprovalStatus))
+		if status != core.ApprovalApproved && status != core.ApprovalRejected {
+			return core.EventGuest{}, errorsstatus.ErrInvalidInput
+		}
+		return s.repo.UpdateGuestApprovalStatus(ctx, repo.UpdateGuestApprovalParams{
+			GuestID:          guestID,
+			EventID:          eventID,
+			ApprovalStatus:   status,
+			ApprovedByUserID: actorID,
+		})
+	}
+
+	// attendance_status — только гость
+	if role == "organizer" || role == "co_host" {
+		return core.EventGuest{}, errorsstatus.ErrForbidden
+	}
+	status := core.AttendanceStatus(strings.TrimSpace(*input.AttendanceStatus))
+	if status != core.AttendanceConfirmed && status != core.AttendanceDeclined {
+		return core.EventGuest{}, errorsstatus.ErrInvalidInput
+	}
+	return s.repo.UpdateGuestAttendanceStatus(ctx, repo.UpdateGuestAttendanceParams{
+		GuestID:          guestID,
+		EventID:          eventID,
+		AttendanceStatus: status,
+	})
+}
+
+func (s *EventService) GetGuestStats(ctx context.Context, eventID string) (core.EventGuestStats, error) {
+	eventID = strings.TrimSpace(eventID)
+	if eventID == "" {
+		return core.EventGuestStats{}, errorsstatus.ErrInvalidInput
+	}
+
+	return s.repo.GetGuestStats(ctx, eventID)
+}
+
 func normalizeEventTime(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	layouts := []string{"15:04", "15:04:05"}

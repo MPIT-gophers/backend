@@ -19,7 +19,8 @@ COPY --from=builder /out/server /app/server
 COPY configs /app/configs
 COPY migrations /app/migrations
 COPY swag /app/swag
-COPY .env /app/.env
+COPY configs /app/configs
+COPY .env.example /app/.env.example
 
 EXPOSE 8080
 

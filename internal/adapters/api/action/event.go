@@ -161,6 +161,125 @@ func (h *EventHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusOK, event)
 }
 
+// GetInvite godoc
+// @Summary Get event invite token
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID"
+// @Success 200 {object} response.SuccessEnvelope{data=object{token=string}}
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Router /events/{eventID}/invite [get]
+func (h *EventHandler) GetInvite(w http.ResponseWriter, r *http.Request) {
+	eventID := chi.URLParam(r, "eventID")
+
+	token, err := h.service.GetInviteToken(r.Context(), eventID)
+	if err != nil {
+		response.Failure(w, errorsstatus.HTTPStatus(err), eventErrorMessage(err))
+		return
+	}
+
+	response.Success(w, http.StatusOK, map[string]string{"token": token})
+}
+
+// ListGuests godoc
+// @Summary List event guests
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID"
+// @Param approval_status query string false "Filter by approval status (pending, approved, rejected)"
+// @Success 200 {object} response.SuccessEnvelope{data=[]core.EventGuest}
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Router /events/{eventID}/guests [get]
+func (h *EventHandler) ListGuests(w http.ResponseWriter, r *http.Request) {
+	eventID := chi.URLParam(r, "eventID")
+	approvalStatus := r.URL.Query().Get("approval_status")
+
+	guests, err := h.service.ListGuests(r.Context(), eventID, approvalStatus)
+	if err != nil {
+		response.Failure(w, errorsstatus.HTTPStatus(err), eventErrorMessage(err))
+		return
+	}
+
+	response.Success(w, http.StatusOK, guests)
+}
+
+type UpdateGuestStatusRequest struct {
+	ApprovalStatus   *string `json:"approval_status"`
+	AttendanceStatus *string `json:"attendance_status"`
+}
+
+// UpdateGuestStatus godoc
+// @Summary Update guest status
+// @Tags events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID"
+// @Param guestID path string true "Guest ID"
+// @Param request body UpdateGuestStatusRequest true "Status update"
+// @Success 200 {object} response.SuccessEnvelope{data=core.EventGuest}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Router /events/{eventID}/guests/{guestID}/status [patch]
+func (h *EventHandler) UpdateGuestStatus(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		response.Failure(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	eventID := chi.URLParam(r, "eventID")
+	guestID := chi.URLParam(r, "guestID")
+
+	var req UpdateGuestStatusRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		response.Failure(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+
+	guest, err := h.service.UpdateGuestStatus(r.Context(), userID, eventID, guestID, service.UpdateGuestStatusInput{
+		ApprovalStatus:   req.ApprovalStatus,
+		AttendanceStatus: req.AttendanceStatus,
+	})
+	if err != nil {
+		response.Failure(w, errorsstatus.HTTPStatus(err), eventErrorMessage(err))
+		return
+	}
+
+	response.Success(w, http.StatusOK, guest)
+}
+
+// GetGuestStats godoc
+// @Summary Get event guest statistics
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Event ID"
+// @Success 200 {object} response.SuccessEnvelope{data=core.EventGuestStats}
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Router /events/{eventID}/stats [get]
+func (h *EventHandler) GetGuestStats(w http.ResponseWriter, r *http.Request) {
+	eventID := chi.URLParam(r, "eventID")
+
+	stats, err := h.service.GetGuestStats(r.Context(), eventID)
+	if err != nil {
+		response.Failure(w, errorsstatus.HTTPStatus(err), eventErrorMessage(err))
+		return
+	}
+
+	response.Success(w, http.StatusOK, stats)
+}
+
 func eventErrorMessage(err error) string {
 	switch {
 	case errors.Is(err, errorsstatus.ErrInvalidInput):
