@@ -1,5 +1,12 @@
 basePath: /api/v1
 definitions:
+  action.CompleteMAXAuthRequest:
+    properties:
+      init_data:
+        type: string
+      session_id:
+        type: string
+    type: object
   action.CreateEventRequest:
     properties:
       budget:
@@ -12,6 +19,16 @@ definitions:
         type: string
       expected_guest_count:
         type: integer
+    type: object
+  action.ExchangeMAXAuthRequest:
+    properties:
+      session_id:
+        type: string
+    type: object
+  action.FundItemRequest:
+    properties:
+      amount:
+        type: number
     type: object
   action.HealthData:
     properties:
@@ -30,6 +47,23 @@ definitions:
       init_data:
         type: string
     type: object
+  action.ParseWishlistRequest:
+    properties:
+      text:
+        type: string
+    type: object
+  action.SubmitGuestIdeaRequest:
+    properties:
+      text:
+        type: string
+    type: object
+  action.UpdateGuestStatusRequest:
+    properties:
+      approval_status:
+        type: string
+      attendance_status:
+        type: string
+    type: object
   action.UpdateMeRequest:
     properties:
       full_name:
@@ -37,6 +71,26 @@ definitions:
       phone:
         type: string
     type: object
+  core.ApprovalStatus:
+    enum:
+    - pending
+    - approved
+    - rejected
+    type: string
+    x-enum-varnames:
+    - ApprovalPending
+    - ApprovalApproved
+    - ApprovalRejected
+  core.AttendanceStatus:
+    enum:
+    - pending
+    - confirmed
+    - declined
+    type: string
+    x-enum-varnames:
+    - AttendancePending
+    - AttendanceConfirmed
+    - AttendanceDeclined
   core.AuthSession:
     properties:
       access_token:
@@ -86,6 +140,42 @@ definitions:
         items:
           $ref: '#/definitions/core.EventVariant'
         type: array
+    type: object
+  core.EventGuest:
+    properties:
+      approval_status:
+        $ref: '#/definitions/core.ApprovalStatus'
+      attendance_status:
+        $ref: '#/definitions/core.AttendanceStatus'
+      created_at:
+        type: string
+      event_id:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: string
+      phone:
+        type: string
+      plus_one_count:
+        type: integer
+      user_id:
+        type: string
+    type: object
+  core.EventGuestStats:
+    properties:
+      approved:
+        type: integer
+      attendance_pending:
+        type: integer
+      confirmed:
+        type: integer
+      declined:
+        type: integer
+      pending_approval:
+        type: integer
+      rejected:
+        type: integer
     type: object
   core.EventLocation:
     properties:
@@ -145,6 +235,28 @@ definitions:
       variant_number:
         type: integer
     type: object
+  core.MAXAuthSession:
+    properties:
+      completed_at:
+        type: string
+      exchanged_at:
+        type: string
+      expires_at:
+        type: string
+      session_id:
+        type: string
+      status:
+        type: string
+    type: object
+  core.MAXAuthStart:
+    properties:
+      expires_at:
+        type: string
+      max_link:
+        type: string
+      session_id:
+        type: string
+    type: object
   core.User:
     properties:
       created_at:
@@ -178,6 +290,374 @@ info:
   title: mpit2026-reg API
   version: 0.1.0
 paths:
+  /api/v1/events/{eventID}/photos:
+    get:
+      description: Retrieves a list of photo URLs for the event. Only accessible to
+        confirmed guests or organizers. Pending/declined guests get 403 Forbidden.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: photos array of strings
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid event ID format
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden (guest not confirmed)
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Get event photos
+      tags:
+      - photos
+  /api/v1/events/{eventID}/photos/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Uploads up to 10 photos as multipart/form-data for the given event.
+        Only guests or organizers can upload. Max file size is 10MB per photo.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Photos to upload
+        in: formData
+        name: photos
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message
+          schema:
+            additionalProperties: true
+            type: object
+        "207":
+          description: 'Multi-Status: Some photos failed to upload'
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "400":
+          description: Bad request or max 10 photos exceeded
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "413":
+          description: Payload too large
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Upload event photos
+      tags:
+      - photos
+  /api/v1/events/{eventID}/wishlist:
+    get:
+      description: Retrieves the wishlist items for the event. Guests see masked details
+        (booked by others is hidden), organizers see everything.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: items array
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid event ID format
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Get event wishlist
+      tags:
+      - wishlist
+  /api/v1/events/{eventID}/wishlist/{itemID}/book:
+    post:
+      description: Allows a guest to book an entire item so others cannot fund or
+        book it. Returns HTTP 409 Conflict if already booked.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Item UUID
+        in: path
+        name: itemID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid UUID
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Item already booked or has funds
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Book a wishlist item
+      tags:
+      - wishlist
+  /api/v1/events/{eventID}/wishlist/{itemID}/fund:
+    post:
+      consumes:
+      - application/json
+      description: Allows a guest to crowdsource funds for an item. Returns HTTP 409
+        if the item is already fully booked.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Item UUID
+        in: path
+        name: itemID
+        required: true
+        type: string
+      - description: Amount payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.FundItemRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: current_fund amount
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid payload or UUID
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Item is already booked
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Fund a wishlist item partially
+      tags:
+      - wishlist
+  /api/v1/events/{eventID}/wishlist/ideas:
+    post:
+      consumes:
+      - application/json
+      description: Validates guest's text against the anti-wishlist using AI. Returns
+        whether allowed or blocked, along with the reasoning.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Idea text payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.SubmitGuestIdeaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: allowed, reason, item
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Failed to submit idea
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Submit a guest gift idea
+      tags:
+      - wishlist
+  /api/v1/events/{eventID}/wishlist/parse:
+    post:
+      consumes:
+      - application/json
+      description: Uses AI to parse freeform text into wishlist and anti-wishlist
+        items. Generates a new wishlist for the event. Only organizers can call this.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Text payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.ParseWishlistRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: items and anti_items arrays
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Parse raw text into wishlist
+      tags:
+      - wishlist
+  /auth/max/complete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: MAX auth completion payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.CompleteMAXAuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.MAXAuthSession'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Complete mobile auth flow through MAX initData
+      tags:
+      - auth
+  /auth/max/exchange:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Auth session exchange payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.ExchangeMAXAuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.AuthSession'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Exchange completed MAX auth session for backend JWT
+      tags:
+      - auth
   /auth/max/login:
     post:
       consumes:
@@ -214,6 +694,58 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorEnvelope'
       summary: Login with MAX WebApp initData
+      tags:
+      - auth
+  /auth/max/session/{sessionID}:
+    get:
+      parameters:
+      - description: Auth session ID
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.MAXAuthSession'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Get MAX auth session status
+      tags:
+      - auth
+  /auth/max/start:
+    post:
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.MAXAuthStart'
+              type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Start mobile auth flow through MAX mini app
       tags:
       - auth
   /events:
@@ -295,6 +827,172 @@ paths:
       security:
       - BearerAuth: []
       summary: Get event by id
+      tags:
+      - events
+  /events/{eventID}/guests:
+    get:
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Filter by approval status (pending, approved, rejected)
+        in: query
+        name: approval_status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/core.EventGuest'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List event guests
+      tags:
+      - events
+  /events/{eventID}/guests/{guestID}/status:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Guest ID
+        in: path
+        name: guestID
+        required: true
+        type: string
+      - description: Status update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.UpdateGuestStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.EventGuest'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update guest status
+      tags:
+      - events
+  /events/{eventID}/invite:
+    get:
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  properties:
+                    token:
+                      type: string
+                  type: object
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get event invite token
+      tags:
+      - events
+  /events/{eventID}/stats:
+    get:
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.EventGuestStats'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get event guest statistics
       tags:
       - events
   /events/join-by-token:

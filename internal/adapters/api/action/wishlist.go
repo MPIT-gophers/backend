@@ -26,6 +26,19 @@ type ParseWishlistRequest struct {
 	Text string `json:"text"`
 }
 
+// ParseWishlist godoc
+// @Summary Parse raw text into wishlist
+// @Description Uses AI to parse freeform text into wishlist and anti-wishlist items. Generates a new wishlist for the event. Only organizers can call this.
+// @Tags wishlist
+// @Accept json
+// @Produce json
+// @Param eventID path string true "Event UUID"
+// @Param request body ParseWishlistRequest true "Text payload"
+// @Success 200 {object} map[string]interface{} "items and anti_items arrays"
+// @Failure 400 {object} response.ErrorEnvelope "Bad request"
+// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
+// @Failure 500 {object} response.ErrorEnvelope "Internal server error"
+// @Router /api/v1/events/{eventID}/wishlist/parse [post]
 func (h *WishlistHandler) ParseWishlist(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
 	eventID, err := uuid.Parse(eventIDStr)
@@ -57,6 +70,17 @@ func (h *WishlistHandler) ParseWishlist(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// GetWishlist godoc
+// @Summary Get event wishlist
+// @Description Retrieves the wishlist items for the event. Guests see masked details (booked by others is hidden), organizers see everything.
+// @Tags wishlist
+// @Produce json
+// @Param eventID path string true "Event UUID"
+// @Success 200 {object} map[string]interface{} "items array"
+// @Failure 400 {object} response.ErrorEnvelope "Invalid event ID format"
+// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
+// @Failure 500 {object} response.ErrorEnvelope "Internal server error"
+// @Router /api/v1/events/{eventID}/wishlist [get]
 func (h *WishlistHandler) GetWishlist(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
 	eventID, err := uuid.Parse(eventIDStr)
@@ -92,6 +116,19 @@ type SubmitGuestIdeaRequest struct {
 	Text string `json:"text"`
 }
 
+// SubmitGuestIdea godoc
+// @Summary Submit a guest gift idea
+// @Description Validates guest's text against the anti-wishlist using AI. Returns whether allowed or blocked, along with the reasoning.
+// @Tags wishlist
+// @Accept json
+// @Produce json
+// @Param eventID path string true "Event UUID"
+// @Param request body SubmitGuestIdeaRequest true "Idea text payload"
+// @Success 200 {object} map[string]interface{} "allowed, reason, item"
+// @Failure 400 {object} response.ErrorEnvelope "Invalid request"
+// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
+// @Failure 500 {object} response.ErrorEnvelope "Failed to submit idea"
+// @Router /api/v1/events/{eventID}/wishlist/ideas [post]
 func (h *WishlistHandler) SubmitGuestIdea(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
 	eventID, err := uuid.Parse(eventIDStr)
@@ -141,6 +178,19 @@ func (h *WishlistHandler) SubmitGuestIdea(w http.ResponseWriter, r *http.Request
 	response.Success(w, http.StatusOK, respData)
 }
 
+// BookItem godoc
+// @Summary Book a wishlist item
+// @Description Allows a guest to book an entire item so others cannot fund or book it. Returns HTTP 409 Conflict if already booked.
+// @Tags wishlist
+// @Produce json
+// @Param eventID path string true "Event UUID"
+// @Param itemID path string true "Item UUID"
+// @Success 200 {object} map[string]interface{} "message"
+// @Failure 400 {object} response.ErrorEnvelope "Invalid UUID"
+// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
+// @Failure 409 {object} response.ErrorEnvelope "Item already booked or has funds"
+// @Failure 500 {object} response.ErrorEnvelope "Internal Server Error"
+// @Router /api/v1/events/{eventID}/wishlist/{itemID}/book [post]
 func (h *WishlistHandler) BookItem(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
 	eventID, err := uuid.Parse(eventIDStr)
@@ -187,6 +237,21 @@ type FundItemRequest struct {
 	Amount float64 `json:"amount"`
 }
 
+// FundItem godoc
+// @Summary Fund a wishlist item partially
+// @Description Allows a guest to crowdsource funds for an item. Returns HTTP 409 if the item is already fully booked.
+// @Tags wishlist
+// @Accept json
+// @Produce json
+// @Param eventID path string true "Event UUID"
+// @Param itemID path string true "Item UUID"
+// @Param request body FundItemRequest true "Amount payload"
+// @Success 200 {object} map[string]interface{} "current_fund amount"
+// @Failure 400 {object} response.ErrorEnvelope "Invalid payload or UUID"
+// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
+// @Failure 409 {object} response.ErrorEnvelope "Item is already booked"
+// @Failure 500 {object} response.ErrorEnvelope "Internal Server Error"
+// @Router /api/v1/events/{eventID}/wishlist/{itemID}/fund [post]
 func (h *WishlistHandler) FundItem(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
 	eventID, err := uuid.Parse(eventIDStr)

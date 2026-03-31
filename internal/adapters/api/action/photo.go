@@ -25,6 +25,20 @@ func NewPhotoHandler(s service.PhotoService) *PhotoHandler {
 	}
 }
 
+// UploadPhotos godoc
+// @Summary Upload event photos
+// @Description Uploads up to 10 photos as multipart/form-data for the given event. Only guests or organizers can upload. Max file size is 10MB per photo.
+// @Tags photos
+// @Accept mpfd
+// @Produce json
+// @Param eventID path string true "Event UUID"
+// @Param photos formData file true "Photos to upload"
+// @Success 200 {object} map[string]interface{} "message"
+// @Failure 400 {object} response.ErrorEnvelope "Bad request or max 10 photos exceeded"
+// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
+// @Failure 413 {object} response.ErrorEnvelope "Payload too large"
+// @Failure 207 {object} response.ErrorEnvelope "Multi-Status: Some photos failed to upload"
+// @Router /api/v1/events/{eventID}/photos/upload [post]
 func (h *PhotoHandler) UploadPhotos(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
 	eventID, err := uuid.Parse(eventIDStr)
@@ -101,8 +115,18 @@ func (h *PhotoHandler) UploadPhotos(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetPhotos returns a list of photo URLs for the event.
-// Only accessible to confirmed guests or organizers.
+// GetPhotos godoc
+// @Summary Get event photos
+// @Description Retrieves a list of photo URLs for the event. Only accessible to confirmed guests or organizers. Pending/declined guests get 403 Forbidden.
+// @Tags photos
+// @Produce json
+// @Param eventID path string true "Event UUID"
+// @Success 200 {object} map[string]interface{} "photos array of strings"
+// @Failure 400 {object} response.ErrorEnvelope "Invalid event ID format"
+// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
+// @Failure 403 {object} response.ErrorEnvelope "Forbidden (guest not confirmed)"
+// @Failure 500 {object} response.ErrorEnvelope "Internal server error"
+// @Router /api/v1/events/{eventID}/photos [get]
 func (h *PhotoHandler) GetPhotos(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	eventIDStr := chi.URLParam(r, "eventID")
