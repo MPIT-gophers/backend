@@ -9,8 +9,11 @@ import (
 	"eventAI/internal/config"
 	"eventAI/internal/infrastructure/authz"
 	"eventAI/internal/infrastructure/database"
+	"eventAI/internal/infrastructure/file"
 	"eventAI/internal/infrastructure/jwt"
 	"eventAI/internal/infrastructure/max"
+	"eventAI/internal/infrastructure/ai"
+	"eventAI/internal/repo"
 	"eventAI/internal/service"
 
 	"github.com/go-chi/chi/v5"
@@ -26,6 +29,16 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 	eventHandler := action.NewEventHandler(eventService)
 
 	authRepo := database.NewAuthRepository(db)
+	
+	wishlistRepo := repo.NewWishlistRepository(db)
+	mockAIParser := ai.NewMockWishlistParser()
+	wishlistService := service.NewWishlistService(wishlistRepo, mockAIParser, eventRepo)
+	wishlistHandler := action.NewWishlistHandler(wishlistService)
+
+	photoRepo := repo.NewPhotoRepository(db)
+	storageProvider := file.NewLocalStorageProvider("./uploads")
+	photoService := service.NewPhotoService(photoRepo, storageProvider, eventRepo)
+	photoHandler := action.NewPhotoHandler(photoService)
 
 	maxClient, err := max.NewClient(cfg.MAX.BotToken, cfg.MAX.APIBaseURL)
 	if err != nil {
@@ -63,6 +76,11 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/healthz", healthHandler.Get)
+		
+		// Serve static uploaded files
+		fs := http.FileServer(http.Dir("./uploads"))
+		r.Handle("/uploads/*", http.StripPrefix("/uploads/", fs))
+		
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/max/start", authHandler.StartMAXAuth)
 			r.Post("/max/login", authHandler.LoginWithMAX)
@@ -86,6 +104,17 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 				r.Get("/guests", eventHandler.ListGuests)
 				r.Get("/stats", eventHandler.GetGuestStats)
 				r.Patch("/guests/{guestID}/status", eventHandler.UpdateGuestStatus)
+				
+				// Wishlist
+				r.Get("/wishlist", wishlistHandler.GetWishlist)
+				r.Post("/wishlist/parse", wishlistHandler.ParseWishlist)
+				r.Post("/wishlist/ideas", wishlistHandler.SubmitGuestIdea)
+				r.Post("/wishlist/{itemID}/book", wishlistHandler.BookItem)
+				r.Post("/wishlist/{itemID}/fund", wishlistHandler.FundItem)
+
+				// Photos
+				r.Post("/photos/upload", photoHandler.UploadPhotos)
+				r.Get("/photos", photoHandler.GetPhotos)
 			})
 		})
 	})
