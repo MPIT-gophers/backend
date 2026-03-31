@@ -2,20 +2,51 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- =====================================================
 -- USERS
--- Глобальные аккаунты через MAX.
--- Авторизация только через MAX, пароля нет.
+-- Глобальные аккаунты системы.
+-- Здесь хранится сама сущность пользователя без привязки к конкретному OAuth-провайдеру.
 -- =====================================================
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    max_user_id VARCHAR(255) NOT NULL UNIQUE,
     full_name VARCHAR(255) NOT NULL,
-    phone VARCHAR(32) NOT NULL UNIQUE,
+    phone VARCHAR(32),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE users IS 'Глобальные аккаунты через MAX';
-COMMENT ON COLUMN users.max_user_id IS 'Внешний уникальный идентификатор пользователя в MAX';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_phone_not_null
+    ON users(phone)
+    WHERE phone IS NOT NULL;
+
+COMMENT ON TABLE users IS 'Глобальные аккаунты системы';
+COMMENT ON COLUMN users.phone IS 'Телефон пользователя в нормализованном формате, если провайдер его отдал';
+
+-- =====================================================
+-- USER_OAUTH_ACCOUNTS
+-- Привязки глобального пользователя к OAuth/SSO-провайдерам.
+-- Сейчас используем MAX, позже сюда же без перелома схемы добавится Telegram.
+-- =====================================================
+CREATE TABLE IF NOT EXISTS user_oauth_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+    provider VARCHAR(32) NOT NULL
+        CHECK (provider IN ('max', 'telegram')),
+    provider_user_id VARCHAR(255) NOT NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (provider, provider_user_id),
+    UNIQUE (user_id, provider)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_oauth_accounts_user_id ON user_oauth_accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_oauth_accounts_provider_user_id
+    ON user_oauth_accounts(provider, provider_user_id);
+
+COMMENT ON TABLE user_oauth_accounts IS 'Связки пользователей с внешними OAuth/SSO-провайдерами';
+COMMENT ON COLUMN user_oauth_accounts.provider IS 'max сейчас, telegram позже';
+COMMENT ON COLUMN user_oauth_accounts.provider_user_id IS 'Внешний идентификатор пользователя у провайдера';
 
 -- =====================================================
 -- EVENTS
@@ -40,6 +71,7 @@ CREATE TABLE IF NOT EXISTS events (
     generation_started_at TIMESTAMPTZ,
     generation_finished_at TIMESTAMPTZ,
     generation_error TEXT,
+    selected_variant_id UUID,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -143,12 +175,59 @@ COMMENT ON COLUMN event_guests.approval_status IS 'Решение организ
 COMMENT ON COLUMN event_guests.attendance_status IS 'Ответ гостя: pending/confirmed/declined';
 
 -- =====================================================
+-- EVENT_VARIANTS
+-- Один вариант = один полный результат генерации от LLM/n8n.
+-- Пользователь в итоге выбирает один вариант целиком.
+-- Источник истины по финальному выбору хранится в events.selected_variant_id.
+-- =====================================================
+CREATE TABLE IF NOT EXISTS event_variants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+
+    variant_number INTEGER NOT NULL CHECK (variant_number > 0),
+    title VARCHAR(255),
+    description TEXT,
+
+    status VARCHAR(32) NOT NULL DEFAULT 'ready'
+        CHECK (status IN ('generating', 'ready', 'failed', 'rejected')),
+
+    llm_request_id VARCHAR(255),
+    generation_error TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (event_id, variant_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_variants_event_id ON event_variants(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_variants_event_status ON event_variants(event_id, status);
+
+COMMENT ON TABLE event_variants IS 'Сгенерированные варианты сценария/подборки для события';
+COMMENT ON COLUMN event_variants.variant_number IS 'Порядковый номер варианта внутри события';
+
+-- =====================================================
+-- EVENTS.selected_variant_id
+-- Финальный вариант, который выбрал пользователь.
+-- =====================================================
+ALTER TABLE events
+    ADD CONSTRAINT fk_events_selected_variant
+    FOREIGN KEY (selected_variant_id)
+    REFERENCES event_variants(id)
+    ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_events_selected_variant_id ON events(selected_variant_id);
+
+COMMENT ON COLUMN events.selected_variant_id IS 'Ссылка на выбранный пользователем вариант события';
+
+-- =====================================================
 -- EVENT_LOCATIONS
--- Карточки локаций от n8n/GigaChat.
+-- Карточки локаций теперь принадлежат конкретному variant-у.
 -- =====================================================
 CREATE TABLE IF NOT EXISTS event_locations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    variant_id UUID NOT NULL REFERENCES event_variants(id) ON DELETE CASCADE,
 
     title VARCHAR(255) NOT NULL,
     address TEXT,
@@ -168,9 +247,10 @@ CREATE TABLE IF NOT EXISTS event_locations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_locations_event_id ON event_locations(event_id);
-CREATE INDEX IF NOT EXISTS idx_event_locations_event_sort ON event_locations(event_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_event_locations_variant_id ON event_locations(variant_id);
+CREATE INDEX IF NOT EXISTS idx_event_locations_variant_sort ON event_locations(variant_id, sort_order);
 
-COMMENT ON TABLE event_locations IS 'Карточки локаций от n8n/GigaChat';
+COMMENT ON TABLE event_locations IS 'Карточки локаций внутри конкретного сгенерированного варианта';
 COMMENT ON COLUMN event_locations.source IS 'initial = первая генерация, regenerated = замена после перегенерации';
 
 -- =====================================================
@@ -187,6 +267,11 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS trg_users_set_updated_at ON users;
 CREATE TRIGGER trg_users_set_updated_at
 BEFORE UPDATE ON users
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_user_oauth_accounts_set_updated_at ON user_oauth_accounts;
+CREATE TRIGGER trg_user_oauth_accounts_set_updated_at
+BEFORE UPDATE ON user_oauth_accounts
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 DROP TRIGGER IF EXISTS trg_events_set_updated_at ON events;
@@ -207,6 +292,11 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 DROP TRIGGER IF EXISTS trg_event_guests_set_updated_at ON event_guests;
 CREATE TRIGGER trg_event_guests_set_updated_at
 BEFORE UPDATE ON event_guests
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_event_variants_set_updated_at ON event_variants;
+CREATE TRIGGER trg_event_variants_set_updated_at
+BEFORE UPDATE ON event_variants
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 DROP TRIGGER IF EXISTS trg_event_locations_set_updated_at ON event_locations;

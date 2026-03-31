@@ -8,7 +8,7 @@
 - конфиг через `.env`
 - подключение к PostgreSQL через `pgxpool`
 - миграции через `golang-migrate`
-- слой `repo` + `usecase`
+- слой `repo` + `service`
 - стартовый домен `registrations`
 - `sqlc`-конфиг и SQL-запросы
 - Docker и docker-compose для локального старта
@@ -35,7 +35,7 @@
 │   │   ├── router             # сборка chi router
 │   │   └── app.go             # композиция приложения
 │   ├── repo                   # интерфейсы репозиториев
-│   ├── usecase                # бизнес-логика
+│   ├── service                # бизнес-логика
 │   └── utils
 ├── migrations                 # SQL migrations
 ├── pkg
@@ -214,7 +214,7 @@ curl --request GET \
 1. Описать доменную модель или входные данные в [internal/entities/core](/home/gdugdh24/projects/mpit2026-reg/backend/internal/entities/core).
 2. Если нужен доступ к БД, добавить SQL в [internal/infrastructure/database/queries](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/database/queries) и обновить код `sqlc`.
 3. Расширить интерфейс репозитория в [internal/repo](/home/gdugdh24/projects/mpit2026-reg/backend/internal/repo).
-4. Реализовать бизнес-логику в [internal/usecase](/home/gdugdh24/projects/mpit2026-reg/backend/internal/usecase).
+4. Реализовать бизнес-логику в [internal/service](/home/gdugdh24/projects/mpit2026-reg/backend/internal/service).
 5. Создать HTTP handler в [internal/adapters/api/action](/home/gdugdh24/projects/mpit2026-reg/backend/internal/adapters/api/action).
 6. Подключить новый endpoint в [internal/infrastructure/router/http.go](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/router/http.go).
 7. Если это внешний API, обновить [swag/openapi.yaml](/home/gdugdh24/projects/mpit2026-reg/backend/swag/openapi.yaml).

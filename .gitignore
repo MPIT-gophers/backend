@@ -1,0 +1,28 @@
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Go build artifacts
+/bin/
+*.test
+*.out
+coverage.out
+cover.out
+
+# Local caches
+/.cache/
+/.gomodcache/
+
+# Temporary files
+/tmp/
+*.tmp
+*.temp
+
+# Logs
+*.log
+
+# IDE / OS files
+.idea/
+.vscode/
+.DS_Store

@@ -14,10 +14,22 @@ type HealthHandler struct {
 	db *pgxpool.Pool
 }
 
+type HealthData struct {
+	Status   string `json:"status"`
+	Database string `json:"database"`
+}
+
 func NewHealthHandler(db *pgxpool.Pool) *HealthHandler {
 	return &HealthHandler{db: db}
 }
 
+// Get godoc
+// @Summary Healthcheck
+// @Tags health
+// @Produce json
+// @Success 200 {object} response.SuccessEnvelope{data=HealthData}
+// @Success 503 {object} response.SuccessEnvelope{data=HealthData}
+// @Router /healthz [get]
 func (h *HealthHandler) Get(w http.ResponseWriter, r *http.Request) {
 	status := http.StatusOK
 	databaseStatus := "ok"
@@ -30,8 +42,8 @@ func (h *HealthHandler) Get(w http.ResponseWriter, r *http.Request) {
 		databaseStatus = "unavailable"
 	}
 
-	response.JSON(w, status, "data", map[string]string{
-		"status":   "ok",
-		"database": databaseStatus,
+	response.Success(w, status, HealthData{
+		Status:   "ok",
+		Database: databaseStatus,
 	})
 }

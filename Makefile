@@ -1,9 +1,9 @@
 APP_NAME := server
 
-.PHONY: help run build test migrate-up migrate-down sqlc-generate compose-up compose-down
+.PHONY: help run build test migrate-up migrate-down sqlc-generate swag-generate compose-up compose-down
 
 help:
-	@printf "run build test migrate-up migrate-down sqlc-generate compose-up compose-down\n"
+	@printf "run build test migrate-up migrate-down sqlc-generate swag-generate compose-up compose-down\n"
 
 run:
 	go run ./cmd/server
@@ -24,9 +24,11 @@ migrate-down:
 sqlc-generate:
 	docker run --rm -v "$(PWD):/src" -w /src sqlc/sqlc:1.29.0 generate
 
+swag-generate:
+	swag init -g cmd/server/main.go -d . -o swag --outputTypes yaml,json
+
 compose-up:
 	docker compose up --build
 
 compose-down:
 	docker compose down -v
-

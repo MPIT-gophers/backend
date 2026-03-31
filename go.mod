@@ -4,6 +4,7 @@ go 1.24.9
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
+	github.com/casbin/casbin/v2 v2.97.0
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/golang-migrate/migrate/v4 v4.18.3
 	github.com/jackc/pgx/v5 v5.7.2
@@ -11,6 +12,7 @@ require (
 )
 
 require (
+	github.com/casbin/govaluate v1.1.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect

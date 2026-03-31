@@ -16,6 +16,13 @@ import (
 	"eventAI/internal/infrastructure/database"
 )
 
+// @title mpit2026-reg API
+// @version 0.1.0
+// @description Backend API for mpit2026-reg.
+// @BasePath /api/v1
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 func main() {
 	cfg, err := config.Load()
 	if err != nil {

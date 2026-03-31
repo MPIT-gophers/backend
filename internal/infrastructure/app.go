@@ -7,11 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"eventAI/internal/adapters/api/action"
 	"eventAI/internal/config"
 	"eventAI/internal/infrastructure/database"
 	"eventAI/internal/infrastructure/router"
-	"eventAI/internal/usecase"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -35,13 +33,11 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		return nil, err
 	}
 
-	registrationRepo := database.NewRegistrationRepository(db)
-	registrationUseCase := usecase.NewRegistrationUseCase(registrationRepo)
-
-	healthHandler := action.NewHealthHandler(db)
-	registrationHandler := action.NewRegistrationHandler(registrationUseCase)
-
-	httpRouter := router.New(logger, healthHandler, registrationHandler)
+	httpRouter, err := router.New(cfg, logger, db)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
 	server := &http.Server{
 		Addr:              cfg.HTTP.Addr(),
 		Handler:           httpRouter,

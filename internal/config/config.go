@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/caarlos0/env/v11"
 	_ "github.com/joho/godotenv/autoload"
@@ -11,6 +12,9 @@ type Config struct {
 	App      AppConfig      `envPrefix:"APP_"`
 	HTTP     HTTPConfig     `envPrefix:"HTTP_"`
 	Postgres PostgresConfig `envPrefix:"POSTGRES_"`
+	JWT      JWTConfig      `envPrefix:"JWT_"`
+	MAX      MAXConfig      `envPrefix:"MAX_"`
+	Casbin   CasbinConfig   `envPrefix:"CASBIN_"`
 	Log      LogConfig      `envPrefix:"LOG_"`
 }
 
@@ -54,6 +58,22 @@ func (c PostgresConfig) DSN() string {
 
 type LogConfig struct {
 	Level string `env:"LEVEL" envDefault:"info"`
+}
+
+type JWTConfig struct {
+	Secret string        `env:"SECRET" envDefault:"local-dev-secret"`
+	TTL    time.Duration `env:"TTL" envDefault:"168h"`
+}
+
+type MAXConfig struct {
+	ValidateURL string        `env:"VALIDATE_URL" envDefault:"http://localhost:8090/oauth/max/validate"`
+	Timeout     time.Duration `env:"TIMEOUT" envDefault:"5s"`
+	APIKey      string        `env:"API_KEY"`
+}
+
+type CasbinConfig struct {
+	ModelPath  string `env:"MODEL_PATH" envDefault:"configs/model/casbin_model.conf"`
+	PolicyPath string `env:"POLICY_PATH" envDefault:"configs/model/casbin_policy.csv"`
 }
 
 func Load() (Config, error) {

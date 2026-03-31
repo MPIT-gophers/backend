@@ -18,7 +18,7 @@ func Recoverer(logger *slog.Logger) func(http.Handler) http.Handler {
 					attrs = append(attrs, slog.Any("panic", rec))
 
 					logger.LogAttrs(r.Context(), slog.LevelError, "panic recovered", attrs...)
-					response.Error(w, http.StatusInternalServerError, "internal server error")
+					response.Failure(w, http.StatusInternalServerError, "internal server error")
 				}
 			}()
 

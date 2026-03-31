@@ -1,0 +1,448 @@
+basePath: /api/v1
+definitions:
+  action.CreateEventRequest:
+    properties:
+      budget:
+        type: string
+      city:
+        type: string
+      event_date:
+        type: string
+      event_time:
+        type: string
+      expected_guest_count:
+        type: integer
+    type: object
+  action.HealthData:
+    properties:
+      database:
+        type: string
+      status:
+        type: string
+    type: object
+  action.JoinEventByTokenRequest:
+    properties:
+      token:
+        type: string
+    type: object
+  action.LoginWithMAXRequest:
+    properties:
+      token:
+        type: string
+    type: object
+  action.UpdateMeRequest:
+    properties:
+      full_name:
+        type: string
+      phone:
+        type: string
+    type: object
+  core.AuthSession:
+    properties:
+      access_token:
+        type: string
+      expires_at:
+        type: string
+      token_type:
+        type: string
+      user:
+        $ref: '#/definitions/core.User'
+    type: object
+  core.Event:
+    properties:
+      access_role:
+        type: string
+      approval_status:
+        type: string
+      attendance_status:
+        type: string
+      budget:
+        type: string
+      city:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      event_date:
+        type: string
+      event_time:
+        type: string
+      expected_guest_count:
+        type: integer
+      id:
+        type: string
+      invite_token:
+        type: string
+      selected_variant_id:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      variants:
+        items:
+          $ref: '#/definitions/core.EventVariant'
+        type: array
+    type: object
+  core.EventLocation:
+    properties:
+      address:
+        type: string
+      ai_comment:
+        type: string
+      ai_score:
+        type: string
+      contacts:
+        type: string
+      created_at:
+        type: string
+      event_id:
+        type: string
+      id:
+        type: string
+      is_rejected:
+        type: boolean
+      rejected_at:
+        type: string
+      sort_order:
+        type: integer
+      source:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      variant_id:
+        type: string
+    type: object
+  core.EventVariant:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      event_id:
+        type: string
+      generation_error:
+        type: string
+      id:
+        type: string
+      llm_request_id:
+        type: string
+      locations:
+        items:
+          $ref: '#/definitions/core.EventLocation'
+        type: array
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      variant_number:
+        type: integer
+    type: object
+  core.User:
+    properties:
+      created_at:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: string
+      phone:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  response.ErrorBody:
+    properties:
+      message:
+        type: string
+    type: object
+  response.ErrorEnvelope:
+    properties:
+      error:
+        $ref: '#/definitions/response.ErrorBody'
+    type: object
+  response.SuccessEnvelope:
+    properties:
+      data: {}
+    type: object
+info:
+  contact: {}
+  description: Backend API for mpit2026-reg.
+  title: mpit2026-reg API
+  version: 0.1.0
+paths:
+  /auth/max/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: MAX login payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.LoginWithMAXRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.AuthSession'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Login with MAX OAuth token
+      tags:
+      - auth
+  /events:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Event payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.CreateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create event
+      tags:
+      - events
+  /events/{eventID}:
+    get:
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get event by id
+      tags:
+      - events
+  /events/join-by-token:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Join event payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.JoinEventByTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Join event by invite token
+      tags:
+      - events
+  /events/my:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/core.Event'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List my events
+      tags:
+      - events
+  /healthz:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/action.HealthData'
+              type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/action.HealthData'
+              type: object
+      summary: Healthcheck
+      tags:
+      - health
+  /me:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Profile update payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.UpdateMeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.User'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update current user profile
+      tags:
+      - auth
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
