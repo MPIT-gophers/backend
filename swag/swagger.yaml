@@ -27,7 +27,7 @@ definitions:
     type: object
   action.LoginWithMAXRequest:
     properties:
-      token:
+      init_data:
         type: string
     type: object
   action.UpdateMeRequest:
@@ -213,11 +213,7 @@ paths:
           description: Conflict
           schema:
             $ref: '#/definitions/response.ErrorEnvelope'
-        "503":
-          description: Service Unavailable
-          schema:
-            $ref: '#/definitions/response.ErrorEnvelope'
-      summary: Login with MAX OAuth token
+      summary: Login with MAX WebApp initData
       tags:
       - auth
   /events:

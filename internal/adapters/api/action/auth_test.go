@@ -45,7 +45,7 @@ func TestAuthHandlerLoginWithMAXSuccess(t *testing.T) {
 		},
 	))
 
-	body := bytes.NewBufferString(`{"token":"max-sso-token"}`)
+	body := bytes.NewBufferString(`{"init_data":"user=%7B%7D&hash=test"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/max/login", body)
 	rec := httptest.NewRecorder()
 
@@ -78,7 +78,7 @@ func TestAuthHandlerLoginWithMAXInvalidJSON(t *testing.T) {
 		&stubTokenIssuer{},
 	))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/max/login", bytes.NewBufferString(`{"token":`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/max/login", bytes.NewBufferString(`{"init_data":`))
 	rec := httptest.NewRecorder()
 
 	handler.LoginWithMAX(rec, req)
@@ -145,7 +145,7 @@ type stubMAXProvider struct {
 	identity service.MAXIdentity
 }
 
-func (s *stubMAXProvider) ValidateToken(_ context.Context, _ string) (service.MAXIdentity, error) {
+func (s *stubMAXProvider) ValidateInitData(_ context.Context, _ string) (service.MAXIdentity, error) {
 	return s.identity, nil
 }
 

@@ -35,7 +35,7 @@ func TestAuthServiceLoginWithMAXCreatesSession(t *testing.T) {
 
 	svc := NewAuthService(authRepo, maxProvider, tokenIssuer)
 
-	session, err := svc.LoginWithMAX(context.Background(), " sso-token ")
+	session, err := svc.LoginWithMAX(context.Background(), " user=%7B%7D ")
 	if err != nil {
 		t.Fatalf("LoginWithMAX() error = %v", err)
 	}
@@ -90,7 +90,7 @@ func TestAuthServiceLoginWithMAXUsesPlaceholderAndNilPhone(t *testing.T) {
 
 	svc := NewAuthService(authRepo, maxProvider, tokenIssuer)
 
-	_, err := svc.LoginWithMAX(context.Background(), "token")
+	_, err := svc.LoginWithMAX(context.Background(), "user=%7B%7D")
 	if err != nil {
 		t.Fatalf("LoginWithMAX() error = %v", err)
 	}
@@ -104,18 +104,18 @@ func TestAuthServiceLoginWithMAXUsesPlaceholderAndNilPhone(t *testing.T) {
 	}
 }
 
-func TestAuthServiceLoginWithMAXPropagatesUnavailable(t *testing.T) {
+func TestAuthServiceLoginWithMAXPropagatesUnauthorized(t *testing.T) {
 	t.Parallel()
 
 	svc := NewAuthService(
 		&stubAuthRepository{},
-		&stubMAXProvider{err: errorsstatus.ErrServiceUnavailable},
+		&stubMAXProvider{err: errorsstatus.ErrUnauthorized},
 		&stubTokenIssuer{},
 	)
 
-	_, err := svc.LoginWithMAX(context.Background(), "token")
-	if !errors.Is(err, errorsstatus.ErrServiceUnavailable) {
-		t.Fatalf("error = %v, want service unavailable", err)
+	_, err := svc.LoginWithMAX(context.Background(), "user=%7B%7D")
+	if !errors.Is(err, errorsstatus.ErrUnauthorized) {
+		t.Fatalf("error = %v, want unauthorized", err)
 	}
 }
 
@@ -201,7 +201,7 @@ type stubMAXProvider struct {
 	err      error
 }
 
-func (s *stubMAXProvider) ValidateToken(_ context.Context, _ string) (MAXIdentity, error) {
+func (s *stubMAXProvider) ValidateInitData(_ context.Context, _ string) (MAXIdentity, error) {
 	if s.err != nil {
 		return MAXIdentity{}, s.err
 	}

@@ -1,163 +1,117 @@
 package max
 
 import (
-	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net"
-	"net/http"
+	"net/url"
+	"sort"
 	"strings"
-	"time"
 
 	errorsstatus "eventAI/internal/errorsStatus"
 	"eventAI/internal/service"
 )
 
+const webAppDataKey = "WebAppData"
+
 type Client struct {
-	httpClient  *http.Client
-	validateURL string
-	apiKey      string
+	botToken string
 }
 
-func NewClient(validateURL string, timeout time.Duration, apiKey string) (*Client, error) {
-	if strings.TrimSpace(validateURL) == "" {
-		return nil, fmt.Errorf("max validate url is required")
-	}
-	if timeout <= 0 {
-		timeout = 5 * time.Second
+func NewClient(botToken string) (*Client, error) {
+	botToken = strings.TrimSpace(botToken)
+	if botToken == "" {
+		return nil, fmt.Errorf("max bot token is required")
 	}
 
-	return &Client{
-		httpClient:  &http.Client{Timeout: timeout},
-		validateURL: validateURL,
-		apiKey:      strings.TrimSpace(apiKey),
-	}, nil
+	return &Client{botToken: botToken}, nil
 }
 
-type validateRequest struct {
-	Token string `json:"token"`
+type maxUser struct {
+	ID        json.Number `json:"id"`
+	FirstName string      `json:"first_name"`
+	LastName  string      `json:"last_name"`
+	Username  string      `json:"username"`
 }
 
-type validateResponse struct {
-	Data      *validateUser `json:"data"`
-	ID        string        `json:"id"`
-	UserID    string        `json:"user_id"`
-	MaxUserID string        `json:"max_user_id"`
-	FullName  string        `json:"full_name"`
-	Name      string        `json:"name"`
-	Phone     string        `json:"phone"`
-}
+func (c *Client) ValidateInitData(_ context.Context, initData string) (service.MAXIdentity, error) {
+	initData = strings.TrimSpace(initData)
+	if initData == "" {
+		return service.MAXIdentity{}, errorsstatus.ErrInvalidInput
+	}
 
-type validateUser struct {
-	ID        string `json:"id"`
-	UserID    string `json:"user_id"`
-	MaxUserID string `json:"max_user_id"`
-	FullName  string `json:"full_name"`
-	Name      string `json:"name"`
-	Phone     string `json:"phone"`
-}
-
-func (c *Client) ValidateToken(ctx context.Context, token string) (service.MAXIdentity, error) {
-	body, err := json.Marshal(validateRequest{Token: token})
+	values, err := url.ParseQuery(initData)
 	if err != nil {
-		return service.MAXIdentity{}, err
+		return service.MAXIdentity{}, errorsstatus.ErrUnauthorized
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.validateURL, bytes.NewReader(body))
-	if err != nil {
-		return service.MAXIdentity{}, err
+	hashValues := values["hash"]
+	if len(hashValues) != 1 {
+		return service.MAXIdentity{}, errorsstatus.ErrUnauthorized
+	}
+	originalHash := strings.TrimSpace(hashValues[0])
+	if originalHash == "" {
+		return service.MAXIdentity{}, errorsstatus.ErrUnauthorized
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		if isTimeoutOrNetwork(err) {
-			return service.MAXIdentity{}, errorsstatus.ErrServiceUnavailable
+	keys := make([]string, 0, len(values))
+	for key, entries := range values {
+		if len(entries) != 1 {
+			return service.MAXIdentity{}, errorsstatus.ErrUnauthorized
 		}
-		return service.MAXIdentity{}, errorsstatus.ErrServiceUnavailable
+		if key == "hash" {
+			continue
+		}
+		keys = append(keys, key)
 	}
-	defer resp.Body.Close()
+	sort.Strings(keys)
 
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+	launchParams := make([]string, 0, len(keys))
+	for _, key := range keys {
+		launchParams = append(launchParams, key+"="+values.Get(key))
+	}
+
+	secretKey := signHMAC([]byte(webAppDataKey), []byte(c.botToken))
+	actualHash := hex.EncodeToString(signHMAC(secretKey, []byte(strings.Join(launchParams, "\n"))))
+	if !hmac.Equal([]byte(actualHash), []byte(originalHash)) {
 		return service.MAXIdentity{}, errorsstatus.ErrUnauthorized
-	case resp.StatusCode >= http.StatusInternalServerError:
-		return service.MAXIdentity{}, errorsstatus.ErrServiceUnavailable
-	case resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices:
+	}
+
+	userRaw := strings.TrimSpace(values.Get("user"))
+	if userRaw == "" {
 		return service.MAXIdentity{}, errorsstatus.ErrUnauthorized
 	}
 
-	var payload validateResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return service.MAXIdentity{}, errorsstatus.ErrServiceUnavailable
+	var user maxUser
+	if err := json.Unmarshal([]byte(userRaw), &user); err != nil {
+		return service.MAXIdentity{}, errorsstatus.ErrUnauthorized
 	}
 
-	providerUserID := firstNonEmpty(
-		payload.MaxUserID,
-		payload.UserID,
-		payload.ID,
-		func() string {
-			if payload.Data == nil {
-				return ""
-			}
-			return firstNonEmpty(payload.Data.MaxUserID, payload.Data.UserID, payload.Data.ID)
-		}(),
-	)
+	providerUserID := strings.TrimSpace(user.ID.String())
 	if providerUserID == "" {
 		return service.MAXIdentity{}, errorsstatus.ErrUnauthorized
 	}
 
-	fullName := firstNonEmpty(
-		payload.FullName,
-		payload.Name,
-		func() string {
-			if payload.Data == nil {
-				return ""
-			}
-			return firstNonEmpty(payload.Data.FullName, payload.Data.Name)
-		}(),
-	)
-
-	phoneValue := firstNonEmpty(
-		payload.Phone,
-		func() string {
-			if payload.Data == nil {
-				return ""
-			}
-			return payload.Data.Phone
-		}(),
-	)
-
-	var phone *string
-	if phoneValue != "" {
-		phone = &phoneValue
+	fullName := strings.TrimSpace(strings.Join([]string{
+		strings.TrimSpace(user.FirstName),
+		strings.TrimSpace(user.LastName),
+	}, " "))
+	if fullName == "" {
+		fullName = strings.TrimSpace(user.Username)
 	}
 
 	return service.MAXIdentity{
 		ProviderUserID: providerUserID,
 		FullName:       fullName,
-		Phone:          phone,
+		Phone:          nil,
 	}, nil
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed != "" {
-			return trimmed
-		}
-	}
-
-	return ""
-}
-
-func isTimeoutOrNetwork(err error) bool {
-	var netErr net.Error
-	return errors.As(err, &netErr)
+func signHMAC(key []byte, data []byte) []byte {
+	mac := hmac.New(sha256.New, key)
+	mac.Write(data)
+	return mac.Sum(nil)
 }

@@ -19,7 +19,7 @@
                 "tags": [
                     "auth"
                 ],
-                "summary": "Login with MAX OAuth token",
+                "summary": "Login with MAX WebApp initData",
                 "parameters": [
                     {
                         "description": "MAX login payload",
@@ -64,12 +64,6 @@
                     },
                     "409": {
                         "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorEnvelope"
-                        }
-                    },
-                    "503": {
-                        "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -500,7 +494,7 @@
         "action.LoginWithMAXRequest": {
             "type": "object",
             "properties": {
-                "token": {
+                "init_data": {
                     "type": "string"
                 }
             }

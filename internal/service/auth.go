@@ -19,7 +19,7 @@ type MAXIdentity struct {
 }
 
 type MAXIdentityProvider interface {
-	ValidateToken(ctx context.Context, token string) (MAXIdentity, error)
+	ValidateInitData(ctx context.Context, initData string) (MAXIdentity, error)
 }
 
 type TokenIssuer interface {
@@ -40,13 +40,13 @@ func NewAuthService(repo repo.AuthRepository, max MAXIdentityProvider, issuer To
 	}
 }
 
-func (s *AuthService) LoginWithMAX(ctx context.Context, token string) (core.AuthSession, error) {
-	token = strings.TrimSpace(token)
-	if token == "" {
+func (s *AuthService) LoginWithMAX(ctx context.Context, initData string) (core.AuthSession, error) {
+	initData = strings.TrimSpace(initData)
+	if initData == "" {
 		return core.AuthSession{}, errorsstatus.ErrInvalidInput
 	}
 
-	identity, err := s.max.ValidateToken(ctx, token)
+	identity, err := s.max.ValidateInitData(ctx, initData)
 	if err != nil {
 		return core.AuthSession{}, err
 	}

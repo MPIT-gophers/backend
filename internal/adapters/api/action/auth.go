@@ -20,11 +20,11 @@ func NewAuthHandler(service *service.AuthService) *AuthHandler {
 }
 
 type LoginWithMAXRequest struct {
-	Token string `json:"token"`
+	InitData string `json:"init_data"`
 }
 
 // LoginWithMAX godoc
-// @Summary Login with MAX OAuth token
+// @Summary Login with MAX WebApp initData
 // @Tags auth
 // @Accept json
 // @Produce json
@@ -33,7 +33,6 @@ type LoginWithMAXRequest struct {
 // @Failure 400 {object} response.ErrorEnvelope
 // @Failure 401 {object} response.ErrorEnvelope
 // @Failure 409 {object} response.ErrorEnvelope
-// @Failure 503 {object} response.ErrorEnvelope
 // @Router /auth/max/login [post]
 func (h *AuthHandler) LoginWithMAX(w http.ResponseWriter, r *http.Request) {
 	var req LoginWithMAXRequest
@@ -46,7 +45,7 @@ func (h *AuthHandler) LoginWithMAX(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.service.LoginWithMAX(r.Context(), req.Token)
+	session, err := h.service.LoginWithMAX(r.Context(), req.InitData)
 	if err != nil {
 		response.Failure(w, errorsstatus.HTTPStatus(err), authErrorMessage(err))
 		return
@@ -111,8 +110,6 @@ func authErrorMessage(err error) string {
 		return "conflict"
 	case errors.Is(err, errorsstatus.ErrNotFound):
 		return "user not found"
-	case errors.Is(err, errorsstatus.ErrServiceUnavailable):
-		return "service temporarily unavailable"
 	default:
 		return "internal server error"
 	}
