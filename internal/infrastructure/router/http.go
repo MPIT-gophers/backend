@@ -61,9 +61,8 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 	r.Use(apimiddleware.Logger(logger))
 	r.Use(apimiddleware.Recoverer(logger))
 
-	r.Get("/healthz", healthHandler.Get)
-
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/healthz", healthHandler.Get)
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/max/login", authHandler.LoginWithMAX)
 		})
