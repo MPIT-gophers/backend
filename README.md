@@ -85,7 +85,7 @@ make compose-down   # docker compose down -v
 - `POSTGRES_*` — подключение к PostgreSQL
 - `POSTGRES_AUTO_MIGRATE=true` — автоприменение миграций при старте
 - `JWT_SECRET`, `JWT_TTL` — подпись и TTL локальных JWT
-- `MAX_VALIDATE_URL`, `MAX_TIMEOUT`, `MAX_API_KEY` — интеграция с MAX validate API
+- `MAX_BOT_TOKEN` — токен бота MAX для проверки подписи `WebAppData / initData`
 - `CASBIN_MODEL_PATH`, `CASBIN_POLICY_PATH` — casbin model/policy
 - `LOG_LEVEL` — уровень логирования
 
@@ -110,12 +110,14 @@ make compose-down   # docker compose down -v
 
 ### Login через MAX
 
+`init_data` нужно передавать из `window.WebApp.initData` внутри mini app MAX.
+
 ```bash
 curl --request POST \
   --url http://localhost:8080/api/v1/auth/max/login \
   --header 'Content-Type: application/json' \
   --data '{
-    "token": "max-sso-token"
+    "init_data": "auth_date=...&query_id=...&user=%7B...%7D&hash=..."
   }'
 ```
 

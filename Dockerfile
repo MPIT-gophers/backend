@@ -16,11 +16,11 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /out/server /app/server
+COPY configs /app/configs
 COPY migrations /app/migrations
 COPY swag /app/swag
-COPY .env.example /app/.env.example
+COPY .env /app/.env
 
 EXPOSE 8080
 
 CMD ["/app/server"]
-

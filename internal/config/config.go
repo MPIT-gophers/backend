@@ -66,9 +66,9 @@ type JWTConfig struct {
 }
 
 type MAXConfig struct {
-	ValidateURL string        `env:"VALIDATE_URL" envDefault:"http://localhost:8090/oauth/max/validate"`
-	Timeout     time.Duration `env:"TIMEOUT" envDefault:"5s"`
-	APIKey      string        `env:"API_KEY"`
+	BotToken    string `env:"BOT_TOKEN"`
+	BotUsername string `env:"BOT_USERNAME"`
+	APIBaseURL  string `env:"API_BASE_URL" envDefault:"https://platform-api.max.ru"`
 }
 
 type CasbinConfig struct {
