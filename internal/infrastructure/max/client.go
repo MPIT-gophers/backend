@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	errorsstatus "eventAI/internal/errorsStatus"
 	"eventAI/internal/service"
@@ -103,10 +105,22 @@ func (c *Client) ValidateInitData(_ context.Context, initData string) (service.M
 		fullName = strings.TrimSpace(user.Username)
 	}
 
+	authDateRaw := strings.TrimSpace(values.Get("auth_date"))
+	if authDateRaw == "" {
+		return service.MAXIdentity{}, errorsstatus.ErrUnauthorized
+	}
+
+	authDateUnix, err := strconv.ParseInt(authDateRaw, 10, 64)
+	if err != nil || authDateUnix <= 0 {
+		return service.MAXIdentity{}, errorsstatus.ErrUnauthorized
+	}
+
 	return service.MAXIdentity{
 		ProviderUserID: providerUserID,
 		FullName:       fullName,
 		Phone:          nil,
+		StartParam:     strings.TrimSpace(values.Get("start_param")),
+		AuthDate:       time.Unix(authDateUnix, 0).UTC(),
 	}, nil
 }
 

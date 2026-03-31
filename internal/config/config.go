@@ -66,7 +66,8 @@ type JWTConfig struct {
 }
 
 type MAXConfig struct {
-	BotToken string `env:"BOT_TOKEN"`
+	BotToken    string `env:"BOT_TOKEN"`
+	BotUsername string `env:"BOT_USERNAME"`
 }
 
 type CasbinConfig struct {

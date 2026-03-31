@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClientValidateInitDataSuccess(t *testing.T) {
@@ -20,9 +21,10 @@ func TestClientValidateInitDataSuccess(t *testing.T) {
 	}
 
 	initData := buildSignedInitData("bot-token", map[string]string{
-		"auth_date": "1771409719",
-		"query_id":  "q-1",
-		"user":      `{"id":67890,"first_name":"Max","last_name":"User","username":"maxuser"}`,
+		"auth_date":   "1771409719",
+		"query_id":    "q-1",
+		"start_param": "session-123",
+		"user":        `{"id":67890,"first_name":"Max","last_name":"User","username":"maxuser"}`,
 	})
 
 	identity, err := client.ValidateInitData(context.Background(), initData)
@@ -40,6 +42,14 @@ func TestClientValidateInitDataSuccess(t *testing.T) {
 
 	if identity.Phone != nil {
 		t.Fatalf("phone = %v, want nil", identity.Phone)
+	}
+
+	if identity.StartParam != "session-123" {
+		t.Fatalf("start param = %q, want session-123", identity.StartParam)
+	}
+
+	if !identity.AuthDate.Equal(time.Unix(1771409719, 0).UTC()) {
+		t.Fatalf("auth date = %v", identity.AuthDate)
 	}
 }
 

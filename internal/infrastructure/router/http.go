@@ -37,7 +37,7 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 		return nil, err
 	}
 
-	authService := service.NewAuthService(authRepo, maxClient, jwtManager)
+	authService := service.NewAuthService(authRepo, maxClient, jwtManager, cfg.MAX.BotUsername)
 	authHandler := action.NewAuthHandler(authService)
 
 	authorizer, err := authz.New(cfg.Casbin.ModelPath, cfg.Casbin.PolicyPath, eventRepo)
@@ -64,7 +64,11 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/healthz", healthHandler.Get)
 		r.Route("/auth", func(r chi.Router) {
+			r.Post("/max/start", authHandler.StartMAXAuth)
 			r.Post("/max/login", authHandler.LoginWithMAX)
+			r.Post("/max/complete", authHandler.CompleteMAXAuth)
+			r.Get("/max/session/{sessionID}", authHandler.GetMAXAuthSession)
+			r.Post("/max/exchange", authHandler.ExchangeMAXAuth)
 		})
 
 		r.Group(func(r chi.Router) {

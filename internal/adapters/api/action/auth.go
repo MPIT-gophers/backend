@@ -9,6 +9,8 @@ import (
 	"eventAI/internal/adapters/api/response"
 	errorsstatus "eventAI/internal/errorsStatus"
 	"eventAI/internal/service"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type AuthHandler struct {
@@ -21,6 +23,32 @@ func NewAuthHandler(service *service.AuthService) *AuthHandler {
 
 type LoginWithMAXRequest struct {
 	InitData string `json:"init_data"`
+}
+
+type CompleteMAXAuthRequest struct {
+	SessionID string `json:"session_id"`
+	InitData  string `json:"init_data"`
+}
+
+type ExchangeMAXAuthRequest struct {
+	SessionID string `json:"session_id"`
+}
+
+// StartMAXAuth godoc
+// @Summary Start mobile auth flow through MAX mini app
+// @Tags auth
+// @Produce json
+// @Success 201 {object} response.SuccessEnvelope{data=core.MAXAuthStart}
+// @Failure 503 {object} response.ErrorEnvelope
+// @Router /auth/max/start [post]
+func (h *AuthHandler) StartMAXAuth(w http.ResponseWriter, r *http.Request) {
+	start, err := h.service.StartMAXAuth(r.Context())
+	if err != nil {
+		response.Failure(w, errorsstatus.HTTPStatus(err), authErrorMessage(err))
+		return
+	}
+
+	response.Success(w, http.StatusCreated, start)
 }
 
 // LoginWithMAX godoc
@@ -46,6 +74,88 @@ func (h *AuthHandler) LoginWithMAX(w http.ResponseWriter, r *http.Request) {
 	}
 
 	session, err := h.service.LoginWithMAX(r.Context(), req.InitData)
+	if err != nil {
+		response.Failure(w, errorsstatus.HTTPStatus(err), authErrorMessage(err))
+		return
+	}
+
+	response.Success(w, http.StatusOK, session)
+}
+
+// CompleteMAXAuth godoc
+// @Summary Complete mobile auth flow through MAX initData
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body CompleteMAXAuthRequest true "MAX auth completion payload"
+// @Success 200 {object} response.SuccessEnvelope{data=core.MAXAuthSession}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 409 {object} response.ErrorEnvelope
+// @Router /auth/max/complete [post]
+func (h *AuthHandler) CompleteMAXAuth(w http.ResponseWriter, r *http.Request) {
+	var req CompleteMAXAuthRequest
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(&req); err != nil {
+		response.Failure(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+
+	session, err := h.service.CompleteMAXAuth(r.Context(), req.SessionID, req.InitData)
+	if err != nil {
+		response.Failure(w, errorsstatus.HTTPStatus(err), authErrorMessage(err))
+		return
+	}
+
+	response.Success(w, http.StatusOK, session)
+}
+
+// GetMAXAuthSession godoc
+// @Summary Get MAX auth session status
+// @Tags auth
+// @Produce json
+// @Param sessionID path string true "Auth session ID"
+// @Success 200 {object} response.SuccessEnvelope{data=core.MAXAuthSession}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Router /auth/max/session/{sessionID} [get]
+func (h *AuthHandler) GetMAXAuthSession(w http.ResponseWriter, r *http.Request) {
+	session, err := h.service.GetMAXAuthSession(r.Context(), chi.URLParam(r, "sessionID"))
+	if err != nil {
+		response.Failure(w, errorsstatus.HTTPStatus(err), authErrorMessage(err))
+		return
+	}
+
+	response.Success(w, http.StatusOK, session)
+}
+
+// ExchangeMAXAuth godoc
+// @Summary Exchange completed MAX auth session for backend JWT
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body ExchangeMAXAuthRequest true "Auth session exchange payload"
+// @Success 200 {object} response.SuccessEnvelope{data=core.AuthSession}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 409 {object} response.ErrorEnvelope
+// @Router /auth/max/exchange [post]
+func (h *AuthHandler) ExchangeMAXAuth(w http.ResponseWriter, r *http.Request) {
+	var req ExchangeMAXAuthRequest
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(&req); err != nil {
+		response.Failure(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+
+	session, err := h.service.ExchangeMAXAuth(r.Context(), req.SessionID)
 	if err != nil {
 		response.Failure(w, errorsstatus.HTTPStatus(err), authErrorMessage(err))
 		return
@@ -105,11 +215,31 @@ func authErrorMessage(err error) string {
 	case errors.Is(err, errorsstatus.ErrInvalidInput):
 		return "invalid input"
 	case errors.Is(err, errorsstatus.ErrUnauthorized):
-		return "unauthorized"
+		switch {
+		case errors.Is(err, service.ErrMAXInitDataExpired):
+			return "max init data expired"
+		case errors.Is(err, service.ErrMAXStartParamMismatch):
+			return "max start param mismatch"
+		default:
+			return "unauthorized"
+		}
 	case errors.Is(err, errorsstatus.ErrConflict):
-		return "conflict"
+		switch {
+		case errors.Is(err, service.ErrMAXAuthSessionNotReady):
+			return "auth session not ready"
+		case errors.Is(err, service.ErrMAXAuthSessionExpired):
+			return "auth session expired"
+		case errors.Is(err, service.ErrMAXAuthSessionAlreadyExchanged):
+			return "auth session already exchanged"
+		case errors.Is(err, service.ErrMAXAuthSessionAlreadyUsed):
+			return "auth session already completed"
+		default:
+			return "conflict"
+		}
 	case errors.Is(err, errorsstatus.ErrNotFound):
-		return "user not found"
+		return "not found"
+	case errors.Is(err, errorsstatus.ErrServiceUnavailable):
+		return "max auth is unavailable"
 	default:
 		return "internal server error"
 	}
