@@ -1,271 +1,212 @@
 # mpit2026-reg backend
 
-Стартовый backend-каркас на `Go + net/http + chi + PostgreSQL + sqlc + pgx + golang-migrate + env + slog`.
+Backend на `Go + chi + PostgreSQL + pgx + sqlc + golang-migrate + Casbin + JWT`.
 
-Проект уже содержит:
+Сейчас в проекте реализованы:
 
-- HTTP API на `chi`
-- конфиг через `.env`
-- подключение к PostgreSQL через `pgxpool`
-- миграции через `golang-migrate`
-- слой `repo` + `service`
-- стартовый домен `registrations`
-- `sqlc`-конфиг и SQL-запросы
-- Docker и docker-compose для локального старта
+- авторизация через `MAX OAuth` с локальным `JWT`
+- обновление профиля пользователя (`full_name`, `phone`)
+- события: создание, список моих событий, вход по invite token, получение события
+- проверка доступа к событию через `Casbin`
+- миграции PostgreSQL
+- генерация DB-слоя через `sqlc`
+- генерация Swagger/OpenAPI через комментарии в handlers
 
 ## Структура
 
 ```text
 .
-├── cmd/server                  # вход в приложение и CLI-команды
-├── configs/model              # описание модели конфигурации
-├── infra
+├── cmd/server
+├── configs/model                  # casbin model + policy
 ├── internal
 │   ├── adapters
 │   │   ├── api
-│   │   │   ├── action         # HTTP handlers
-│   │   │   ├── middleware     # HTTP middleware
-│   │   │   └── response       # единый формат JSON-ответов
-│   │   └── logging            # инициализация slog
-│   ├── config                 # загрузка env-конфига
-│   ├── entities/core          # доменные сущности
-│   ├── errorsStatus           # ошибки домена и HTTP-маппинг
+│   │   │   ├── action             # HTTP handlers + swagger comments
+│   │   │   ├── middleware         # auth / recoverer / logger / access checks
+│   │   │   └── response           # success / failure envelopes
+│   │   └── logging
+│   ├── config
+│   ├── entities/core              # доменные DTO
+│   ├── errorsStatus
 │   ├── infrastructure
-│   │   ├── database           # pgx, migrate, sqlc, repo impl
-│   │   ├── router             # сборка chi router
-│   │   └── app.go             # композиция приложения
-│   ├── repo                   # интерфейсы репозиториев
-│   ├── service                # бизнес-логика
-│   └── utils
-├── migrations                 # SQL migrations
-├── pkg
-├── swag                       # минимальная OpenAPI-спека
-└── tools
+│   │   ├── authz                  # casbin authorizer
+│   │   ├── database               # postgres, migrate, sqlc, repo impl
+│   │   ├── jwt                    # issue / verify JWT
+│   │   ├── max                    # клиент MAX validate API
+│   │   ├── router                 # wiring repo/service/handler/routes
+│   │   └── app.go                 # composition root
+│   ├── repo                       # интерфейсы репозиториев
+│   └── service                    # бизнес-логика
+├── migrations
+├── swag                           # swagger.yaml + swagger.json
+├── sqlc.yaml
+├── Makefile
+└── docker-compose.yml
 ```
 
-## Быстрый старт локально
-
-1. Скопировать env:
+## Быстрый старт
 
 ```bash
 cp .env.example .env
-```
-
-2. Поднять PostgreSQL:
-
-```bash
 docker compose up postgres -d
-```
-
-3. Запустить приложение:
-
-```bash
 make run
 ```
 
-Приложение поднимется на `http://localhost:8080`.
+HTTP API поднимется на `http://localhost:8080`.
 
-## Быстрый старт в Docker
+Полный старт в Docker:
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Сервисы:
-
-- API: `http://localhost:8080`
-- PostgreSQL: `localhost:5432`
-
 ## Основные команды
 
 ```bash
 make run            # локальный запуск
 make build          # сборка бинарника
-make test           # запуск тестов
+make test           # все тесты
 make migrate-up     # применить миграции
 make migrate-down   # откатить последнюю миграцию
-make sqlc-generate  # перегенерировать код sqlc через docker
-make compose-up     # поднять проект в docker compose
-make compose-down   # остановить docker compose
+make sqlc-generate  # перегенерировать sqlc код через docker
+make swag-generate  # перегенерировать swagger из комментариев
+make compose-up     # docker compose up --build
+make compose-down   # docker compose down -v
 ```
 
-## .env.example
+## Конфиг
 
-В репозитории уже есть файл [.env.example](/home/gdugdh24/projects/mpit2026-reg/backend/.env.example) с минимальным набором переменных.
+Базовый конфиг лежит в [`.env.example`](/home/gdugdh24/projects/mpit2026-reg/backend/.env.example).
 
 Ключевые переменные:
 
-- `HTTP_HOST`, `HTTP_PORT` определяют адрес HTTP-сервера
-- `POSTGRES_*` определяют параметры подключения к БД
-- `POSTGRES_AUTO_MIGRATE=true` включает автоприменение миграций при старте сервера
-- `POSTGRES_MIGRATIONS_PATH=file://migrations` указывает путь для `golang-migrate`
-- `LOG_LEVEL` задает уровень логирования (`debug`, `info`, `warn`, `error`)
+- `HTTP_HOST`, `HTTP_PORT` — адрес HTTP-сервера
+- `POSTGRES_*` — подключение к PostgreSQL
+- `POSTGRES_AUTO_MIGRATE=true` — автоприменение миграций при старте
+- `JWT_SECRET`, `JWT_TTL` — подпись и TTL локальных JWT
+- `MAX_VALIDATE_URL`, `MAX_TIMEOUT`, `MAX_API_KEY` — интеграция с MAX validate API
+- `CASBIN_MODEL_PATH`, `CASBIN_POLICY_PATH` — casbin model/policy
+- `LOG_LEVEL` — уровень логирования
 
-`.env` подхватывается автоматически при локальном запуске через `godotenv/autoload`, поэтому достаточно создать файл рядом с `go.mod`.
+`.env` подхватывается автоматически через `godotenv/autoload`.
 
-## Логи
+## Текущие роуты
 
-Логи пишутся через `slog` в JSON и используют единый набор ключей.
+Публичные:
 
-Базовые поля:
+- `GET /healthz`
+- `POST /api/v1/auth/max/login`
 
-- `time`
-- `level`
-- `msg`
-- `service`
-- `env`
+Под `Authorization: Bearer <jwt>`:
 
-Для HTTP-запросов дополнительно пишутся:
+- `PATCH /api/v1/me`
+- `GET /api/v1/events/my`
+- `POST /api/v1/events`
+- `POST /api/v1/events/join-by-token`
+- `GET /api/v1/events/{eventID}`
 
-- `request_id`
-- `trace_id`
-- `correlation_id`
-- `http_method`
-- `http_path`
-- `http_route`
-- `http_host`
-- `remote_ip`
-- `user_agent`
-- `http_status`
-- `response_bytes`
-- `duration_ms`
+## Примеры запросов
 
-Поддерживаемые входящие заголовки трассировки:
-
-- `X-Request-ID`
-- `X-Correlation-ID`
-- `X-Trace-ID`
-- `Traceparent`
-
-Если они не переданы, сервис сам генерирует идентификаторы и возвращает их обратно в response headers.
-
-## API
-
-### Healthcheck
-
-```bash
-curl --request GET \
-  --url http://localhost:8080/healthz
-```
-
-Пример ответа:
-
-```json
-{
-  "data": {
-    "status": "ok",
-    "database": "ok"
-  }
-}
-```
-
-### Создать регистрацию
+### Login через MAX
 
 ```bash
 curl --request POST \
-  --url http://localhost:8080/api/v1/registrations \
+  --url http://localhost:8080/api/v1/auth/max/login \
   --header 'Content-Type: application/json' \
   --data '{
-    "full_name": "Ivan Ivanov",
-    "email": "ivan@example.com"
+    "token": "max-sso-token"
   }'
 ```
 
-Пример ответа:
-
-```json
-{
-  "data": {
-    "id": 1,
-    "full_name": "Ivan Ivanov",
-    "email": "ivan@example.com",
-    "created_at": "2026-03-31T12:00:00Z"
-  }
-}
-```
-
-### Получить список регистраций
+### Обновить профиль
 
 ```bash
-curl --request GET \
-  --url http://localhost:8080/api/v1/registrations
+curl --request PATCH \
+  --url http://localhost:8080/api/v1/me \
+  --header 'Authorization: Bearer <jwt>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "full_name": "Иван Иванов",
+    "phone": "+79141234567"
+  }'
 ```
 
-Пример ответа:
+Телефон в сервисе нормализуется к виду `79141234567`.
 
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "full_name": "Ivan Ivanov",
-      "email": "ivan@example.com",
-      "created_at": "2026-03-31T12:00:00Z"
-    }
-  ]
-}
-```
-
-## Как добавлять роуты
-
-Базовый поток такой:
-
-1. Описать доменную модель или входные данные в [internal/entities/core](/home/gdugdh24/projects/mpit2026-reg/backend/internal/entities/core).
-2. Если нужен доступ к БД, добавить SQL в [internal/infrastructure/database/queries](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/database/queries) и обновить код `sqlc`.
-3. Расширить интерфейс репозитория в [internal/repo](/home/gdugdh24/projects/mpit2026-reg/backend/internal/repo).
-4. Реализовать бизнес-логику в [internal/service](/home/gdugdh24/projects/mpit2026-reg/backend/internal/service).
-5. Создать HTTP handler в [internal/adapters/api/action](/home/gdugdh24/projects/mpit2026-reg/backend/internal/adapters/api/action).
-6. Подключить новый endpoint в [internal/infrastructure/router/http.go](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/router/http.go).
-7. Если это внешний API, обновить [swag/openapi.yaml](/home/gdugdh24/projects/mpit2026-reg/backend/swag/openapi.yaml).
-
-Минимальный пример регистрации нового роута:
-
-```go
-func NewRouter(logger *slog.Logger, health *action.HealthHandler, registrations *action.RegistrationHandler) http.Handler {
-    r := chi.NewRouter()
-
-    r.Get("/healthz", health.Get)
-
-    r.Route("/api/v1", func(r chi.Router) {
-        r.Get("/registrations", registrations.List)
-        r.Post("/registrations", registrations.Create)
-        r.Get("/new-resource", someHandler.List)
-    })
-
-    return r
-}
-```
-
-Если роут требует новую таблицу или поля:
-
-1. Добавить миграцию в [migrations](/home/gdugdh24/projects/mpit2026-reg/backend/migrations)
-2. Добавить SQL-запросы для `sqlc`
-3. Перегенерировать код:
+### Создать событие
 
 ```bash
-make sqlc-generate
+curl --request POST \
+  --url http://localhost:8080/api/v1/events \
+  --header 'Authorization: Bearer <jwt>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "city": "Якутск",
+    "event_date": "2026-04-15",
+    "event_time": "19:30",
+    "expected_guest_count": 12,
+    "budget": "15000"
+  }'
 ```
+
+### Войти в событие по invite token
+
+```bash
+curl --request POST \
+  --url http://localhost:8080/api/v1/events/join-by-token \
+  --header 'Authorization: Bearer <jwt>' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "token": "invite-token"
+  }'
+```
+
+## Модель БД
+
+Стартовая миграция: [migrations/000001_init.up.sql](/home/gdugdh24/projects/mpit2026-reg/backend/migrations/000001_init.up.sql).
+
+Основные таблицы:
+
+- `users` — глобальный профиль пользователя
+- `user_oauth_accounts` — привязки к OAuth/SSO провайдерам (`max`, позже `telegram`)
+- `events` — событие и его общий lifecycle
+- `event_users` — организаторы / co-hosts
+- `event_invites` — многоразовые deep-link инвайты
+- `event_guests` — RSVP-гости
+- `event_variants` — варианты подборки/сценария от LLM
+- `event_locations` — карточки локаций внутри конкретного варианта
+
+Ключевая связь:
+
+- `events 1 -> N event_variants`
+- `event_variants 1 -> N event_locations`
+- `events.selected_variant_id` — выбранный пользователем вариант
 
 ## Миграции
 
-Применить миграции:
+Применить:
 
 ```bash
 make migrate-up
 ```
 
-Откатить последнюю миграцию:
+Откатить последнюю:
 
 ```bash
 make migrate-down
 ```
 
-Также сервер умеет выполнять миграции сам при старте, если `POSTGRES_AUTO_MIGRATE=true`.
+Сервер также умеет сам прогонять миграции при старте, если `POSTGRES_AUTO_MIGRATE=true`.
 
 ## sqlc
 
-SQL-запросы лежат в [internal/infrastructure/database/queries/registrations.sql](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/database/queries/registrations.sql), конфиг `sqlc` в [sqlc.yaml](/home/gdugdh24/projects/mpit2026-reg/backend/sqlc.yaml).
+SQL-запросы лежат в:
+
+- [internal/infrastructure/database/queries/auth.sql](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/database/queries/auth.sql)
+- [internal/infrastructure/database/queries/events.sql](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/database/queries/events.sql)
+
+Конфиг генерации: [sqlc.yaml](/home/gdugdh24/projects/mpit2026-reg/backend/sqlc.yaml).
 
 Перегенерация:
 
@@ -273,6 +214,50 @@ SQL-запросы лежат в [internal/infrastructure/database/queries/regis
 make sqlc-generate
 ```
 
-## OpenAPI
+Сгенерированный код попадает в [internal/infrastructure/database/sqlc](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/database/sqlc), а repo-слой поверх него живёт в [internal/infrastructure/database](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/database).
 
-Минимальная спецификация лежит в [swag/openapi.yaml](/home/gdugdh24/projects/mpit2026-reg/backend/swag/openapi.yaml).
+## Swagger / OpenAPI
+
+Swagger генерируется из комментариев в handlers и `cmd/server/main.go`.
+
+Команда:
+
+```bash
+make swag-generate
+```
+
+Артефакты:
+
+- [swag/swagger.yaml](/home/gdugdh24/projects/mpit2026-reg/backend/swag/swagger.yaml)
+- [swag/swagger.json](/home/gdugdh24/projects/mpit2026-reg/backend/swag/swagger.json)
+
+Swagger UI в приложение сейчас не встроен.
+
+## Как добавлять новую фичу
+
+Обычный поток:
+
+1. Описать доменные DTO в [internal/entities/core](/home/gdugdh24/projects/mpit2026-reg/backend/internal/entities/core).
+2. Если нужна БД, добавить или изменить миграцию в [migrations](/home/gdugdh24/projects/mpit2026-reg/backend/migrations).
+3. Добавить SQL в [internal/infrastructure/database/queries](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/database/queries).
+4. Выполнить `make sqlc-generate`.
+5. Обновить интерфейс репозитория в [internal/repo](/home/gdugdh24/projects/mpit2026-reg/backend/internal/repo).
+6. Реализовать бизнес-логику в [internal/service](/home/gdugdh24/projects/mpit2026-reg/backend/internal/service).
+7. Добавить handler в [internal/adapters/api/action](/home/gdugdh24/projects/mpit2026-reg/backend/internal/adapters/api/action).
+8. Подключить роут в [internal/infrastructure/router/http.go](/home/gdugdh24/projects/mpit2026-reg/backend/internal/infrastructure/router/http.go).
+9. Если меняется внешний API, выполнить `make swag-generate`.
+
+## Тесты
+
+Сейчас в проекте есть unit-тесты на:
+
+- `internal/service`
+- `internal/adapters/api/action`
+- `internal/adapters/api/middleware`
+- `internal/infrastructure/jwt`
+
+Запуск:
+
+```bash
+make test
+```
