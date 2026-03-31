@@ -68,6 +68,7 @@ type JWTConfig struct {
 type MAXConfig struct {
 	BotToken    string `env:"BOT_TOKEN"`
 	BotUsername string `env:"BOT_USERNAME"`
+	APIBaseURL  string `env:"API_BASE_URL" envDefault:"https://platform-api.max.ru"`
 }
 
 type CasbinConfig struct {

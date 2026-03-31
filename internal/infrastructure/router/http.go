@@ -27,7 +27,7 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 
 	authRepo := database.NewAuthRepository(db)
 
-	maxClient, err := max.NewClient(cfg.MAX.BotToken)
+	maxClient, err := max.NewClient(cfg.MAX.BotToken, cfg.MAX.APIBaseURL)
 	if err != nil {
 		return nil, err
 	}

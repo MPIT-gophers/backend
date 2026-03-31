@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"eventAI/internal/config"
 	"eventAI/internal/infrastructure/database"
+	"eventAI/internal/infrastructure/max"
 	"eventAI/internal/infrastructure/router"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -38,7 +40,7 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 				slog.Int("db_port", cfg.Postgres.Port),
 				slog.String("db_name", cfg.Postgres.DBName),
 			)
-			return nil, fmt.Errorf("auto migrate: %w", err)
+			panic(fmt.Errorf("auto migrate: %w", err))
 		}
 		logger.Info("postgres migrations completed",
 			slog.String("direction", "up"),
@@ -69,12 +71,55 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 			slog.Int("db_port", cfg.Postgres.Port),
 			slog.String("db_name", cfg.Postgres.DBName),
 		)
-		return nil, err
+		panic(err)
 	}
 	logger.Info("postgres connection established",
 		slog.String("db_host", cfg.Postgres.Host),
 		slog.Int("db_port", cfg.Postgres.Port),
 		slog.String("db_name", cfg.Postgres.DBName),
+	)
+
+	logger.Info("max bot connection started",
+		slog.String("max_api_base_url", cfg.MAX.APIBaseURL),
+		slog.String("configured_bot_username", normalizeStartupUsername(cfg.MAX.BotUsername)),
+	)
+	maxClient, err := max.NewClient(cfg.MAX.BotToken, cfg.MAX.APIBaseURL)
+	if err != nil {
+		logger.Error("max bot connection failed",
+			slog.Any("error", err),
+			slog.String("max_api_base_url", cfg.MAX.APIBaseURL),
+		)
+		panic(err)
+	}
+
+	botInfo, err := maxClient.GetMe(ctx)
+	if err != nil {
+		logger.Error("max bot connection failed",
+			slog.Any("error", err),
+			slog.String("max_api_base_url", cfg.MAX.APIBaseURL),
+			slog.String("configured_bot_username", normalizeStartupUsername(cfg.MAX.BotUsername)),
+		)
+		panic(err)
+	}
+
+	configuredUsername := normalizeStartupUsername(cfg.MAX.BotUsername)
+	if configuredUsername != "" && botInfo.Username != "" && configuredUsername != botInfo.Username {
+		err = fmt.Errorf("configured MAX_BOT_USERNAME %q does not match bot username %q", configuredUsername, botInfo.Username)
+		logger.Error("max bot connection failed",
+			slog.Any("error", err),
+			slog.String("max_api_base_url", cfg.MAX.APIBaseURL),
+			slog.String("configured_bot_username", configuredUsername),
+			slog.String("actual_bot_username", botInfo.Username),
+			slog.String("bot_id", botInfo.ID),
+		)
+		panic(err)
+	}
+
+	logger.Info("max bot connection established",
+		slog.String("max_api_base_url", cfg.MAX.APIBaseURL),
+		slog.String("bot_id", botInfo.ID),
+		slog.String("bot_username", botInfo.Username),
+		slog.String("bot_name", botInfo.Name),
 	)
 
 	httpRouter, err := router.New(cfg, logger, db)
@@ -115,4 +160,10 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 func (a *App) Close() {
 	a.db.Close()
+}
+
+func normalizeStartupUsername(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "@")
+	return value
 }
