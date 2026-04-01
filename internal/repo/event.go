@@ -26,9 +26,27 @@ type UpdateGuestAttendanceParams struct {
 	AttendanceStatus core.AttendanceStatus
 }
 
+type GeneratedEventVariant struct {
+	Title       *string
+	Description *string
+	Locations   []GeneratedEventLocation
+}
+
+type GeneratedEventLocation struct {
+	Title     string
+	Address   *string
+	Contacts  *string
+	AIComment *string
+	AIScore   *string
+	SortOrder int
+	Source    string
+}
+
 type EventRepository interface {
 	Create(ctx context.Context, params CreateEventParams) (core.Event, error)
 	UpdateStatus(ctx context.Context, eventID string, status string) error
+	SaveGeneratedVariant(ctx context.Context, eventID string, variant GeneratedEventVariant) error
+	FailGeneration(ctx context.Context, eventID string, generationError string) error
 	ListMine(ctx context.Context, userID string) ([]core.Event, error)
 	JoinByToken(ctx context.Context, params JoinEventByTokenParams) (core.Event, error)
 	GetByID(ctx context.Context, eventID string) (core.Event, error)

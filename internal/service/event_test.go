@@ -17,7 +17,14 @@ func TestEventServiceCreateNormalizesInput(t *testing.T) {
 	repository := &stubEventRepository{
 		createResult: core.Event{ID: "event-1", Status: core.EventStatusGenerating},
 	}
-	generator := &stubEventGenerator{}
+	generator := &stubEventGenerator{
+		pointSearchResult: n8n.PointSearchResponse{
+			Total: 1,
+			Venues: []n8n.PointSearchVenue{
+				{Name: stringPtr("Leningrad"), Address: stringPtr("Ленинградский проспект, 24а")},
+			},
+		},
+	}
 	service := NewEventService(repository, generator)
 
 	event, err := service.Create(context.Background(), " user-1 ", CreateEventInput{
@@ -34,6 +41,10 @@ func TestEventServiceCreateNormalizesInput(t *testing.T) {
 
 	if event.ID != "event-1" {
 		t.Fatalf("event id = %q, want event-1", event.ID)
+	}
+
+	if event.Status != core.EventStatusReady {
+		t.Fatalf("event status = %q, want ready", event.Status)
 	}
 
 	if repository.lastCreateParams.UserID != "user-1" {
@@ -74,6 +85,14 @@ func TestEventServiceCreateNormalizesInput(t *testing.T) {
 
 	if generator.lastRequest.Budget.Amount != 15000.50 {
 		t.Fatalf("budget.amount = %v, want 15000.50", generator.lastRequest.Budget.Amount)
+	}
+
+	if repository.lastSavedVariant == nil {
+		t.Fatalf("expected generated variant to be saved")
+	}
+
+	if len(repository.lastSavedVariant.Locations) != 1 {
+		t.Fatalf("saved locations len = %d, want 1", len(repository.lastSavedVariant.Locations))
 	}
 }
 
@@ -136,12 +155,12 @@ func TestEventServiceCreateMarksEventFailedWhenGeneratorUnavailable(t *testing.T
 		t.Fatalf("error = %v, want service unavailable", err)
 	}
 
-	if repository.lastUpdateStatusEventID != "event-1" {
-		t.Fatalf("updated event id = %q, want event-1", repository.lastUpdateStatusEventID)
+	if repository.lastFailGenerationEventID != "event-1" {
+		t.Fatalf("failed event id = %q, want event-1", repository.lastFailGenerationEventID)
 	}
 
-	if repository.lastUpdateStatusValue != core.EventStatusFailed {
-		t.Fatalf("updated status = %q, want failed", repository.lastUpdateStatusValue)
+	if repository.lastFailGenerationReason == "" {
+		t.Fatalf("expected failure reason to be recorded")
 	}
 }
 
@@ -277,9 +296,14 @@ type stubEventRepository struct {
 	createErr        error
 	lastCreateParams repo.CreateEventParams
 	updateStatusErr  error
+	saveVariantErr   error
+	failGenerateErr  error
 
-	lastUpdateStatusEventID string
-	lastUpdateStatusValue   string
+	lastUpdateStatusEventID   string
+	lastUpdateStatusValue     string
+	lastSavedVariant          *repo.GeneratedEventVariant
+	lastFailGenerationEventID string
+	lastFailGenerationReason  string
 
 	listResult     []core.Event
 	listErr        error
@@ -323,6 +347,17 @@ func (s *stubEventRepository) UpdateStatus(_ context.Context, eventID string, st
 	s.lastUpdateStatusEventID = eventID
 	s.lastUpdateStatusValue = status
 	return s.updateStatusErr
+}
+
+func (s *stubEventRepository) SaveGeneratedVariant(_ context.Context, eventID string, variant repo.GeneratedEventVariant) error {
+	s.lastSavedVariant = &variant
+	return s.saveVariantErr
+}
+
+func (s *stubEventRepository) FailGeneration(_ context.Context, eventID string, generationError string) error {
+	s.lastFailGenerationEventID = eventID
+	s.lastFailGenerationReason = generationError
+	return s.failGenerateErr
 }
 
 func (s *stubEventRepository) ListMine(_ context.Context, userID string) ([]core.Event, error) {
@@ -378,4 +413,8 @@ type stubEventGenerator struct {
 func (s *stubEventGenerator) PointSearch(_ context.Context, input n8n.PointSearchRequest) (n8n.PointSearchResponse, error) {
 	s.lastRequest = input
 	return s.pointSearchResult, s.pointSearchErr
+}
+
+func stringPtr(value string) *string {
+	return &value
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -27,14 +28,16 @@ INSERT INTO events (
     event_time,
     expected_guest_count,
     budget,
-    status
+    status,
+    generation_started_at
 ) VALUES (
     $1,
     $2::date,
     $3::time,
     $4,
     $5::numeric,
-    $6
+    $6,
+    NOW()
 )
 RETURNING
     id,
@@ -55,6 +58,75 @@ const updateEventStatusSQL = `
 UPDATE events
 SET
     status = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+const failEventGenerationSQL = `
+UPDATE events
+SET
+    status = 'failed',
+    generation_finished_at = NOW(),
+    generation_error = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+const nextVariantNumberSQL = `
+SELECT COALESCE(MAX(variant_number), 0) + 1
+FROM event_variants
+WHERE event_id = $1
+`
+
+const insertEventVariantSQL = `
+INSERT INTO event_variants (
+    event_id,
+    variant_number,
+    title,
+    description,
+    status
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    'ready'
+)
+RETURNING id
+`
+
+const insertEventLocationSQL = `
+INSERT INTO event_locations (
+    event_id,
+    variant_id,
+    title,
+    address,
+    contacts,
+    ai_comment,
+    ai_score,
+    sort_order,
+    source
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    $9
+)
+`
+
+const completeEventGenerationSQL = `
+UPDATE events
+SET
+    status = 'ready',
+    generation_finished_at = NOW(),
+    generation_error = NULL,
+    title = COALESCE($2, title),
+    description = COALESCE($3, description),
     updated_at = NOW()
 WHERE id = $1
 `
@@ -166,6 +238,82 @@ func (r *EventRepository) UpdateStatus(ctx context.Context, eventID string, stat
 	}
 
 	tag, err := r.db.Exec(ctx, updateEventStatusSQL, id, status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsstatus.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *EventRepository) SaveGeneratedVariant(ctx context.Context, eventID string, variant repo.GeneratedEventVariant) error {
+	id, err := parseUUID(eventID)
+	if err != nil {
+		return errorsstatus.ErrInvalidInput
+	}
+
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var variantNumber int32
+	if err := tx.QueryRow(ctx, nextVariantNumberSQL, id).Scan(&variantNumber); err != nil {
+		return err
+	}
+
+	var variantID pgtype.UUID
+	if err := tx.QueryRow(ctx, insertEventVariantSQL, id, variantNumber, variant.Title, variant.Description).Scan(&variantID); err != nil {
+		return mapEventPgError(err)
+	}
+
+	for _, location := range variant.Locations {
+		var aiScore pgtype.Numeric
+		if location.AIScore != nil {
+			aiScore, err = parseNumeric(*location.AIScore)
+			if err != nil {
+				return errorsstatus.ErrInvalidInput
+			}
+		}
+
+		if _, err := tx.Exec(
+			ctx,
+			insertEventLocationSQL,
+			id,
+			variantID,
+			location.Title,
+			location.Address,
+			location.Contacts,
+			location.AIComment,
+			aiScore,
+			int32(location.SortOrder),
+			location.Source,
+		); err != nil {
+			return mapEventPgError(err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, completeEventGenerationSQL, id, variant.Title, variant.Description); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *EventRepository) FailGeneration(ctx context.Context, eventID string, generationError string) error {
+	id, err := parseUUID(eventID)
+	if err != nil {
+		return errorsstatus.ErrInvalidInput
+	}
+
+	tag, err := r.db.Exec(ctx, failEventGenerationSQL, id, generationError)
 	if err != nil {
 		return err
 	}

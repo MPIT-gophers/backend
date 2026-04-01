@@ -20,6 +20,7 @@ const (
 	defaultPointSearchEventType = "корпоратив"
 	defaultBudgetType           = "total"
 	defaultBudgetCurrency       = "RUB"
+	defaultVariantSource        = "initial"
 )
 
 type EventGenerator interface {
@@ -113,7 +114,7 @@ func (s *EventService) Create(ctx context.Context, userID string, input CreateEv
 		return core.Event{}, err
 	}
 
-	if _, err := s.generator.PointSearch(ctx, n8n.PointSearchRequest{
+	pointSearchResponse, err := s.generator.PointSearch(ctx, n8n.PointSearchRequest{
 		Event: defaultPointSearchEventType,
 		City:  city,
 		Date:  eventDate.Format("2006-01-02"),
@@ -125,14 +126,26 @@ func (s *EventService) Create(ctx context.Context, userID string, input CreateEv
 		},
 		Participants: input.Scale,
 		Preferences:  []string{energy},
-	}); err != nil {
-		if updateErr := s.repo.UpdateStatus(ctx, event.ID, core.EventStatusFailed); updateErr != nil {
+	})
+	if err != nil {
+		if updateErr := s.repo.FailGeneration(ctx, event.ID, err.Error()); updateErr != nil {
 			return core.Event{}, updateErr
 		}
 
 		return core.Event{}, fmt.Errorf("%w: %v", errorsstatus.ErrServiceUnavailable, err)
 	}
 
+	generatedVariant := buildGeneratedVariant(city, energy, input.Scale, pointSearchTime, pointSearchResponse)
+	if err := s.repo.SaveGeneratedVariant(ctx, event.ID, generatedVariant); err != nil {
+		if failErr := s.repo.FailGeneration(ctx, event.ID, err.Error()); failErr != nil {
+			return core.Event{}, failErr
+		}
+		return core.Event{}, err
+	}
+
+	event.Status = core.EventStatusReady
+	event.Title = generatedVariant.Title
+	event.Description = generatedVariant.Description
 	return event, nil
 }
 
@@ -268,6 +281,36 @@ func normalizeBudget(value string) (string, error) {
 	return fmt.Sprintf("%.2f", parsed), nil
 }
 
+func buildGeneratedVariant(city, energy string, scale int, timeValue string, response n8n.PointSearchResponse) repo.GeneratedEventVariant {
+	title := fmt.Sprintf("Подборка площадок в %s", city)
+	description := fmt.Sprintf(
+		"Найдено %d мест для компании %d чел. с фокусом на \"%s\" к %s.",
+		len(response.Venues),
+		scale,
+		energy,
+		timeValue,
+	)
+
+	locations := make([]repo.GeneratedEventLocation, 0, len(response.Venues))
+	for i, venue := range response.Venues {
+		locations = append(locations, repo.GeneratedEventLocation{
+			Title:     firstNonEmpty(derefString(venue.Name), derefString(venue.AddressName), derefString(venue.Address), fmt.Sprintf("Локация %d", i+1)),
+			Address:   firstNonNilString(venue.Address, venue.AddressName),
+			Contacts:  nil,
+			AIComment: nullableString(joinNonEmpty([]string{derefString(venue.PurposeName), derefString(venue.AddressComment), derefString(venue.Type)}, " • ")),
+			AIScore:   nil,
+			SortOrder: i + 1,
+			Source:    defaultVariantSource,
+		})
+	}
+
+	return repo.GeneratedEventVariant{
+		Title:       &title,
+		Description: &description,
+		Locations:   locations,
+	}
+}
+
 func formatPointSearchTime(value string) (string, error) {
 	parsed, err := time.Parse("15:04:05", value)
 	if err != nil {
@@ -275,6 +318,59 @@ func formatPointSearchTime(value string) (string, error) {
 	}
 
 	return parsed.Format("15:04"), nil
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(*value)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+
+	return ""
+}
+
+func firstNonNilString(values ...*string) *string {
+	for _, value := range values {
+		if value == nil {
+			continue
+		}
+		trimmed := strings.TrimSpace(*value)
+		if trimmed == "" {
+			continue
+		}
+		return &trimmed
+	}
+
+	return nil
+}
+
+func joinNonEmpty(values []string, separator string) string {
+	filtered := make([]string, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			filtered = append(filtered, trimmed)
+		}
+	}
+
+	return strings.Join(filtered, separator)
+}
+
+func nullableString(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+
+	return &value
 }
 
 func GenerateInviteToken() (string, error) {

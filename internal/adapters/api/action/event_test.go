@@ -152,6 +152,14 @@ func (s *stubEventRepository) UpdateStatus(_ context.Context, _ string, _ string
 	return nil
 }
 
+func (s *stubEventRepository) SaveGeneratedVariant(_ context.Context, _ string, _ repo.GeneratedEventVariant) error {
+	return nil
+}
+
+func (s *stubEventRepository) FailGeneration(_ context.Context, _ string, _ string) error {
+	return nil
+}
+
 func (s *stubEventRepository) ListMine(_ context.Context, _ string) ([]core.Event, error) {
 	return s.listResult, nil
 }
