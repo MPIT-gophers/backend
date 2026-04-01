@@ -18,7 +18,20 @@ import (
 
 // @title mpit2026-reg API
 // @version 0.1.0
-// @description Backend API for mpit2026-reg.
+// @description Backend API для сервиса mpit2026-reg.
+// @description
+// @description Основные возможности:
+// @description - авторизация через MAX mini app и локальный JWT
+// @description - получение и обновление профиля текущего пользователя
+// @description - создание событий, получение invite token и вход по нему
+// @description - управление гостями и фиксация статуса посещения
+// @description - wishlist и фото внутри события
+// @description
+// @description Аутентификация:
+// @description - защищённые методы требуют заголовок Authorization: Bearer <jwt>
+// @description - JWT можно получить через /auth/max/login или через мобильный flow /auth/max/start -> /auth/max/complete -> /auth/max/exchange
+// @description
+// @description Swagger UI доступен по адресу /api/docs/.
 // @host mpit-bot.kostya1024.ru
 // @schemes https
 // @BasePath /api/v1

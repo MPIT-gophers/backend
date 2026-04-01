@@ -4,7 +4,7 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "Backend API for mpit2026-reg.",
+        "description": "Backend API для сервиса mpit2026-reg.\n\nОсновные возможности:\n- авторизация через MAX mini app и локальный JWT\n- получение и обновление профиля текущего пользователя\n- создание событий, получение invite token и вход по нему\n- управление гостями и фиксация статуса посещения\n- wishlist и фото внутри события\n\nАутентификация:\n- защищённые методы требуют заголовок Authorization: Bearer \u003cjwt\u003e\n- JWT можно получить через /auth/max/login или через мобильный flow /auth/max/start -\u003e /auth/max/complete -\u003e /auth/max/exchange\n\nSwagger UI доступен по адресу /api/docs/.",
         "title": "mpit2026-reg API",
         "contact": {},
         "version": "0.1.0"
@@ -434,6 +434,7 @@
         },
         "/auth/max/complete": {
             "post": {
+                "description": "Второй шаг мобильного сценария входа.\nМетод принимает session_id, созданный через /auth/max/start, и init_data, полученный после открытия MAX mini app.\nBackend проверяет подпись MAX, срок действия init_data и соответствие start_param созданной auth session.\nПосле успешной проверки session переходит в состояние completed, но JWT ещё не выдаётся.",
                 "consumes": [
                     "application/json"
                 ],
@@ -443,10 +444,10 @@
                 "tags": [
                     "auth"
                 ],
-                "summary": "Complete mobile auth flow through MAX initData",
+                "summary": "Завершить мобильный auth flow через MAX init_data",
                 "parameters": [
                     {
-                        "description": "MAX auth completion payload",
+                        "description": "Тело запроса с session_id и init_data из MAX",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -457,7 +458,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Auth session успешно завершена",
                         "schema": {
                             "allOf": [
                                 {
@@ -475,25 +476,25 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Некорректный JSON или обязательные поля отсутствуют",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "init_data невалиден, просрочен или start_param не соответствует session_id",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Auth session не найдена",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "409": {
-                        "description": "Conflict",
+                        "description": "Сессия уже завершена, уже обменяна на JWT или истекла",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -503,6 +504,7 @@
         },
         "/auth/max/exchange": {
             "post": {
+                "description": "Финальный шаг мобильного auth flow.\nМетод принимает session_id, проверяет, что auth session уже находится в состоянии completed, и только после этого выдаёт JWT backend.\nПосле успешного обмена повторное использование той же session запрещено.",
                 "consumes": [
                     "application/json"
                 ],
@@ -512,10 +514,10 @@
                 "tags": [
                     "auth"
                 ],
-                "summary": "Exchange completed MAX auth session for backend JWT",
+                "summary": "Обменять completed auth session на локальный JWT",
                 "parameters": [
                     {
-                        "description": "Auth session exchange payload",
+                        "description": "Тело запроса с session_id для обмена на JWT",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -526,7 +528,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "JWT успешно выдан",
                         "schema": {
                             "allOf": [
                                 {
@@ -544,19 +546,19 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Некорректный JSON или пустой session_id",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Auth session не найдена",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "409": {
-                        "description": "Conflict",
+                        "description": "Сессия ещё не готова, уже обменяна, уже использована или истекла",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -566,6 +568,7 @@
         },
         "/auth/max/login": {
             "post": {
+                "description": "Упрощённый сценарий авторизации для случая, когда frontend уже работает внутри MAX mini app.\nМетод принимает init_data из window.WebApp.initData, валидирует подпись, срок жизни данных и идентичность пользователя.\nЕсли пользователь ещё не существует в системе, он будет создан автоматически через OAuth-привязку.\nВ ответе возвращается локальный JWT и профиль пользователя.",
                 "consumes": [
                     "application/json"
                 ],
@@ -575,10 +578,10 @@
                 "tags": [
                     "auth"
                 ],
-                "summary": "Login with MAX WebApp initData",
+                "summary": "Войти по MAX init_data и сразу получить JWT",
                 "parameters": [
                     {
-                        "description": "MAX login payload",
+                        "description": "Тело запроса с init_data из MAX mini app",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -589,7 +592,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "JWT успешно выдан",
                         "schema": {
                             "allOf": [
                                 {
@@ -607,19 +610,19 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Некорректный JSON или пустой init_data",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "init_data невалиден, просрочен или не прошёл проверку подписи",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "409": {
-                        "description": "Conflict",
+                        "description": "Конфликт бизнес-логики авторизации",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -629,17 +632,18 @@
         },
         "/auth/max/session/{sessionID}": {
             "get": {
+                "description": "Возвращает текущее состояние auth session, созданной через /auth/max/start.\nИспользуется для polling-сценария, когда один клиент ждёт, пока пользователь завершит вход в MAX на другом устройстве или в другом окне.\nВозможные статусы описаны в core.MAXAuthSession.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "auth"
                 ],
-                "summary": "Get MAX auth session status",
+                "summary": "Получить статус MAX auth session",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Auth session ID",
+                        "description": "ID auth session",
                         "name": "sessionID",
                         "in": "path",
                         "required": true
@@ -647,7 +651,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Текущий статус auth session",
                         "schema": {
                             "allOf": [
                                 {
@@ -665,13 +669,13 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Некорректный session_id",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Auth session не найдена",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -681,16 +685,17 @@
         },
         "/auth/max/start": {
             "post": {
+                "description": "Создаёт временную auth session для мобильного сценария входа через MAX.\nВ ответе возвращается session_id и deep link на MAX mini app.\nПользователь должен открыть ссылку, подтвердить вход внутри MAX, после чего фронтенд или backend может опрашивать статус сессии.\nЭтот метод полезен, когда вход начинается не из уже открытого mini app, а из внешнего клиента.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "auth"
                 ],
-                "summary": "Start mobile auth flow through MAX mini app",
+                "summary": "Запустить мобильный auth flow через MAX mini app",
                 "responses": {
                     "201": {
-                        "description": "Created",
+                        "description": "Создана auth session и ссылка для входа",
                         "schema": {
                             "allOf": [
                                 {
@@ -708,7 +713,7 @@
                         }
                     },
                     "503": {
-                        "description": "Service Unavailable",
+                        "description": "MAX auth недоступен: не настроен bot username или недоступен внешний MAX API",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -1307,6 +1312,7 @@
                         "BearerAuth": []
                     }
                 ],
+                "description": "Обновляет профиль пользователя, который определяется из Bearer JWT.\nМожно передать full_name, phone или оба поля сразу.\nТелефон нормализуется backend-логикой к цифровому виду без знака плюс и разделителей.\nХотя бы одно поле должно быть передано, иначе метод вернёт ошибку валидации.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1316,10 +1322,10 @@
                 "tags": [
                     "auth"
                 ],
-                "summary": "Update current user profile",
+                "summary": "Обновить профиль текущего пользователя",
                 "parameters": [
                     {
-                        "description": "Profile update payload",
+                        "description": "Тело запроса с обновлением full_name и/или phone",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -1330,7 +1336,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Профиль успешно обновлён",
                         "schema": {
                             "allOf": [
                                 {
@@ -1348,25 +1354,25 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Некорректный JSON или ошибка валидации полей",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Пользователь не найден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "409": {
-                        "description": "Conflict",
+                        "description": "Конфликт при обновлении профиля",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
