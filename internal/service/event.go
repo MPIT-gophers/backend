@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -12,24 +13,38 @@ import (
 	"eventAI/internal/entities/core"
 	errorsstatus "eventAI/internal/errorsStatus"
 	"eventAI/internal/repo"
+	"eventAI/pkg/n8n"
 )
 
-type EventService struct {
-	repo repo.EventRepository
+const (
+	defaultPointSearchEventType = "корпоратив"
+	defaultBudgetType           = "total"
+	defaultBudgetCurrency       = "RUB"
+)
+
+type EventGenerator interface {
+	PointSearch(ctx context.Context, input n8n.PointSearchRequest) (n8n.PointSearchResponse, error)
 }
 
-func NewEventService(repo repo.EventRepository) *EventService {
+type EventService struct {
+	repo      repo.EventRepository
+	generator EventGenerator
+}
+
+func NewEventService(repo repo.EventRepository, generator EventGenerator) *EventService {
 	return &EventService{
-		repo: repo,
+		repo:      repo,
+		generator: generator,
 	}
 }
 
 type CreateEventInput struct {
-	City               string
-	EventDate          string
-	EventTime          string
-	ExpectedGuestCount int
-	Budget             string
+	City   string
+	Date   string
+	Time   string
+	Scale  int
+	Energy string
+	Budget string
 }
 
 func (s *EventService) Create(ctx context.Context, userID string, input CreateEventInput) (core.Event, error) {
@@ -43,7 +58,7 @@ func (s *EventService) Create(ctx context.Context, userID string, input CreateEv
 		return core.Event{}, errorsstatus.ErrInvalidInput
 	}
 
-	eventDate, err := time.Parse("2006-01-02", strings.TrimSpace(input.EventDate))
+	eventDate, err := time.Parse("2006-01-02", strings.TrimSpace(input.Date))
 	if err != nil {
 		return core.Event{}, errorsstatus.ErrInvalidInput
 	}
@@ -53,12 +68,17 @@ func (s *EventService) Create(ctx context.Context, userID string, input CreateEv
 		return core.Event{}, errorsstatus.ErrInvalidInput
 	}
 
-	eventTime, err := normalizeEventTime(input.EventTime)
+	eventTime, err := normalizeEventTime(input.Time)
 	if err != nil {
 		return core.Event{}, errorsstatus.ErrInvalidInput
 	}
 
-	if input.ExpectedGuestCount <= 0 {
+	if input.Scale <= 0 {
+		return core.Event{}, errorsstatus.ErrInvalidInput
+	}
+
+	energy := strings.TrimSpace(input.Energy)
+	if energy == "" || len([]rune(energy)) > 255 {
 		return core.Event{}, errorsstatus.ErrInvalidInput
 	}
 
@@ -67,14 +87,53 @@ func (s *EventService) Create(ctx context.Context, userID string, input CreateEv
 		return core.Event{}, errorsstatus.ErrInvalidInput
 	}
 
-	return s.repo.Create(ctx, repo.CreateEventParams{
+	budgetAmount, err := strconv.ParseFloat(budget, 64)
+	if err != nil || math.IsNaN(budgetAmount) || math.IsInf(budgetAmount, 0) {
+		return core.Event{}, errorsstatus.ErrInvalidInput
+	}
+
+	if s.generator == nil {
+		return core.Event{}, fmt.Errorf("event generator is not configured")
+	}
+
+	event, err := s.repo.Create(ctx, repo.CreateEventParams{
 		UserID:             userID,
 		City:               city,
 		EventDate:          eventDate.Format("2006-01-02"),
 		EventTime:          eventTime,
-		ExpectedGuestCount: input.ExpectedGuestCount,
+		ExpectedGuestCount: input.Scale,
 		Budget:             budget,
 	})
+	if err != nil {
+		return core.Event{}, err
+	}
+
+	pointSearchTime, err := formatPointSearchTime(eventTime)
+	if err != nil {
+		return core.Event{}, err
+	}
+
+	if _, err := s.generator.PointSearch(ctx, n8n.PointSearchRequest{
+		Event: defaultPointSearchEventType,
+		City:  city,
+		Date:  eventDate.Format("2006-01-02"),
+		Time:  pointSearchTime,
+		Budget: n8n.PointSearchBudget{
+			Type:     defaultBudgetType,
+			Amount:   budgetAmount,
+			Currency: defaultBudgetCurrency,
+		},
+		Participants: input.Scale,
+		Preferences:  []string{energy},
+	}); err != nil {
+		if updateErr := s.repo.UpdateStatus(ctx, event.ID, core.EventStatusFailed); updateErr != nil {
+			return core.Event{}, updateErr
+		}
+
+		return core.Event{}, fmt.Errorf("%w: %v", errorsstatus.ErrServiceUnavailable, err)
+	}
+
+	return event, nil
 }
 
 func (s *EventService) ListMine(ctx context.Context, userID string) ([]core.Event, error) {
@@ -207,6 +266,15 @@ func normalizeBudget(value string) (string, error) {
 	}
 
 	return fmt.Sprintf("%.2f", parsed), nil
+}
+
+func formatPointSearchTime(value string) (string, error) {
+	parsed, err := time.Parse("15:04:05", value)
+	if err != nil {
+		return "", fmt.Errorf("invalid point search time")
+	}
+
+	return parsed.Format("15:04"), nil
 }
 
 func GenerateInviteToken() (string, error) {

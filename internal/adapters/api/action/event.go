@@ -22,27 +22,28 @@ func NewEventHandler(service *service.EventService) *EventHandler {
 }
 
 type CreateEventRequest struct {
-	City               string `json:"city"`
-	EventDate          string `json:"event_date"`
-	EventTime          string `json:"event_time"`
-	ExpectedGuestCount int    `json:"expected_guest_count"`
-	Budget             string `json:"budget"`
+	City   string `json:"city"`
+	Date   string `json:"date"`
+	Time   string `json:"time"`
+	Scale  int    `json:"scale"`
+	Energy string `json:"energy"`
+	Budget string `json:"budget"`
 }
 
 // Create godoc
 // @Summary Создать событие
-// @Description Создаёт новое событие от имени текущего авторизованного пользователя.
+// @Description Создаёт событие в статусе generating и запускает подбор через n8n webhook.
 // @Description Организатором события автоматически становится пользователь из Bearer JWT.
-// @Description В запросе нужно передать базовые параметры события: город, дату, время, ожидаемое число гостей и бюджет.
+// @Description В запросе нужно передать город, дату, время, масштаб, vibe и бюджет.
 // @Tags events
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param request body CreateEventRequest true "Тело запроса с параметрами события"
-// @Success 201 {object} response.SuccessEnvelope{data=core.Event} "Событие успешно создано"
+// @Success 202 {object} response.SuccessEnvelope{data=core.Event} "Генерация события успешно запущена"
 // @Failure 400 {object} response.ErrorEnvelope "Некорректный JSON или ошибка валидации полей"
 // @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
-// @Failure 409 {object} response.ErrorEnvelope "Конфликт при создании события"
+// @Failure 503 {object} response.ErrorEnvelope "Связь с n8n недоступна"
 // @Router /events [post]
 func (h *EventHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
@@ -61,18 +62,19 @@ func (h *EventHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	event, err := h.service.Create(r.Context(), userID, service.CreateEventInput{
-		City:               req.City,
-		EventDate:          req.EventDate,
-		EventTime:          req.EventTime,
-		ExpectedGuestCount: req.ExpectedGuestCount,
-		Budget:             req.Budget,
+		City:   req.City,
+		Date:   req.Date,
+		Time:   req.Time,
+		Scale:  req.Scale,
+		Energy: req.Energy,
+		Budget: req.Budget,
 	})
 	if err != nil {
 		response.Failure(w, errorsstatus.HTTPStatus(err), eventErrorMessage(err))
 		return
 	}
 
-	response.Success(w, http.StatusCreated, event)
+	response.Success(w, http.StatusAccepted, event)
 }
 
 // ListMine godoc
@@ -313,6 +315,8 @@ func eventErrorMessage(err error) string {
 		return "conflict"
 	case errors.Is(err, errorsstatus.ErrNotFound):
 		return "not found"
+	case errors.Is(err, errorsstatus.ErrServiceUnavailable):
+		return "service unavailable"
 	default:
 		return "internal server error"
 	}

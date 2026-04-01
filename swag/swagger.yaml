@@ -13,12 +13,14 @@ definitions:
         type: string
       city:
         type: string
-      event_date:
+      date:
         type: string
-      event_time:
+      energy:
         type: string
-      expected_guest_count:
+      scale:
         type: integer
+      time:
+        type: string
     type: object
   action.ExchangeMAXAuthRequest:
     properties:
@@ -806,9 +808,9 @@ paths:
       consumes:
       - application/json
       description: |-
-        Создаёт новое событие от имени текущего авторизованного пользователя.
+        Создаёт событие в статусе generating и запускает подбор через n8n webhook.
         Организатором события автоматически становится пользователь из Bearer JWT.
-        В запросе нужно передать базовые параметры события: город, дату, время, ожидаемое число гостей и бюджет.
+        В запросе нужно передать город, дату, время, масштаб, vibe и бюджет.
       parameters:
       - description: Тело запроса с параметрами события
         in: body
@@ -819,8 +821,8 @@ paths:
       produces:
       - application/json
       responses:
-        "201":
-          description: Событие успешно создано
+        "202":
+          description: Генерация события успешно запущена
           schema:
             allOf:
             - $ref: '#/definitions/response.SuccessEnvelope'
@@ -836,8 +838,8 @@ paths:
           description: JWT отсутствует или невалиден
           schema:
             $ref: '#/definitions/response.ErrorEnvelope'
-        "409":
-          description: Конфликт при создании события
+        "503":
+          description: Связь с n8n недоступна
           schema:
             $ref: '#/definitions/response.ErrorEnvelope'
       security:

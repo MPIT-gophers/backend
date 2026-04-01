@@ -145,12 +145,15 @@ curl --request POST \
   --header 'Content-Type: application/json' \
   --data '{
     "city": "Якутск",
-    "event_date": "2026-04-15",
-    "event_time": "19:30",
-    "expected_guest_count": 12,
+    "date": "2026-04-15",
+    "time": "19:30",
+    "scale": 12,
+    "energy": "караоке",
     "budget": "15000"
   }'
 ```
+
+На успешный запуск генерации backend отвечает `202 Accepted`, создаёт событие со статусом `generating` и отправляет webhook в n8n.
 
 ### Войти в событие по invite token
 

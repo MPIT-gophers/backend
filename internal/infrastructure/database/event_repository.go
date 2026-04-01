@@ -20,6 +20,45 @@ type EventRepository struct {
 	queries *dbsqlc.Queries
 }
 
+const createEventSQL = `
+INSERT INTO events (
+    city,
+    event_date,
+    event_time,
+    expected_guest_count,
+    budget,
+    status
+) VALUES (
+    $1,
+    $2::date,
+    $3::time,
+    $4,
+    $5::numeric,
+    $6
+)
+RETURNING
+    id,
+    city,
+    event_date,
+    event_time,
+    expected_guest_count,
+    budget,
+    title,
+    description,
+    status,
+    selected_variant_id,
+    created_at,
+    updated_at
+`
+
+const updateEventStatusSQL = `
+UPDATE events
+SET
+    status = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
 func NewEventRepository(db *pgxpool.Pool) repo.EventRepository {
 	return &EventRepository{
 		db:      db,
@@ -56,13 +95,30 @@ func (r *EventRepository) Create(ctx context.Context, params repo.CreateEventPar
 
 	queries := r.queries.WithTx(tx)
 
-	row, err := queries.CreateEvent(ctx, dbsqlc.CreateEventParams{
-		City:               params.City,
-		EventDate:          eventDate,
-		EventTime:          eventTime,
-		ExpectedGuestCount: int32(params.ExpectedGuestCount),
-		Budget:             budget,
-	})
+	var row dbsqlc.CreateEventRow
+	err = tx.QueryRow(
+		ctx,
+		createEventSQL,
+		params.City,
+		eventDate,
+		eventTime,
+		int32(params.ExpectedGuestCount),
+		budget,
+		core.EventStatusGenerating,
+	).Scan(
+		&row.ID,
+		&row.City,
+		&row.EventDate,
+		&row.EventTime,
+		&row.ExpectedGuestCount,
+		&row.Budget,
+		&row.Title,
+		&row.Description,
+		&row.Status,
+		&row.SelectedVariantID,
+		&row.CreatedAt,
+		&row.UpdatedAt,
+	)
 	if err != nil {
 		return core.Event{}, mapEventPgError(err)
 	}
@@ -101,6 +157,23 @@ func (r *EventRepository) Create(ctx context.Context, params repo.CreateEventPar
 	event.InviteToken = &token
 
 	return event, nil
+}
+
+func (r *EventRepository) UpdateStatus(ctx context.Context, eventID string, status string) error {
+	id, err := parseUUID(eventID)
+	if err != nil {
+		return errorsstatus.ErrInvalidInput
+	}
+
+	tag, err := r.db.Exec(ctx, updateEventStatusSQL, id, status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsstatus.ErrNotFound
+	}
+
+	return nil
 }
 
 func (r *EventRepository) ListMine(ctx context.Context, userID string) ([]core.Event, error) {

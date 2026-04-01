@@ -2,6 +2,14 @@ package core
 
 import "time"
 
+const (
+	EventStatusDraft      = "draft"
+	EventStatusGenerating = "generating"
+	EventStatusReady      = "ready"
+	EventStatusFailed     = "failed"
+	EventStatusCancelled  = "cancelled"
+)
+
 type Event struct {
 	ID                 string         `json:"id"`
 	City               string         `json:"city"`

@@ -15,6 +15,7 @@ import (
 	"eventAI/internal/infrastructure/max"
 	"eventAI/internal/repo"
 	"eventAI/internal/service"
+	n8nclient "eventAI/pkg/n8n"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -26,7 +27,8 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 	docsHandler := action.NewDocsHandler()
 
 	eventRepo := database.NewEventRepository(db)
-	eventService := service.NewEventService(eventRepo)
+	pointSearchClient := n8nclient.NewClient(cfg.N8N.PointSearchWebhookURL, cfg.N8N.Timeout)
+	eventService := service.NewEventService(eventRepo, pointSearchClient)
 	eventHandler := action.NewEventHandler(eventService)
 
 	authRepo := database.NewAuthRepository(db)

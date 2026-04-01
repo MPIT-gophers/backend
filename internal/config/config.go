@@ -14,6 +14,7 @@ type Config struct {
 	Postgres PostgresConfig `envPrefix:"POSTGRES_"`
 	JWT      JWTConfig      `envPrefix:"JWT_"`
 	MAX      MAXConfig      `envPrefix:"MAX_"`
+	N8N      N8NConfig      `envPrefix:"N8N_"`
 	Casbin   CasbinConfig   `envPrefix:"CASBIN_"`
 	Log      LogConfig      `envPrefix:"LOG_"`
 }
@@ -69,6 +70,11 @@ type MAXConfig struct {
 	BotToken    string `env:"BOT_TOKEN"`
 	BotUsername string `env:"BOT_USERNAME"`
 	APIBaseURL  string `env:"API_BASE_URL" envDefault:"https://platform-api.max.ru"`
+}
+
+type N8NConfig struct {
+	PointSearchWebhookURL string        `env:"POINT_SEARCH_WEBHOOK_URL" envDefault:"https://mpit-bot.kostya1024.ru/webhook/point-search"`
+	Timeout               time.Duration `env:"TIMEOUT" envDefault:"15s"`
 }
 
 type CasbinConfig struct {

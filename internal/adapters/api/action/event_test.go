@@ -12,6 +12,7 @@ import (
 	"eventAI/internal/entities/core"
 	"eventAI/internal/repo"
 	"eventAI/internal/service"
+	"eventAI/pkg/n8n"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -29,24 +30,24 @@ func TestEventHandlerCreateSuccess(t *testing.T) {
 			City:              "Якутск",
 			EventDate:         "2099-06-01",
 			EventTime:         "19:30:00",
-			Status:            "draft",
+			Status:            core.EventStatusGenerating,
 			SelectedVariantID: nil,
 		},
-	}))
+	}, &stubEventGenerator{}))
 
 	wrapped := middleware.Auth(func(token string) (string, error) {
 		return "user-1", nil
 	})(http.HandlerFunc(handler.Create))
 
-	body := bytes.NewBufferString(`{"city":"Якутск","event_date":"2099-06-01","event_time":"19:30","expected_guest_count":10,"budget":"15000"}`)
+	body := bytes.NewBufferString(`{"city":"Якутск","date":"2099-06-01","time":"19:30","scale":10,"energy":"караоке","budget":"15000"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", body)
 	req.Header.Set("Authorization", "Bearer good-token")
 	rec := httptest.NewRecorder()
 
 	wrapped.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusAccepted)
 	}
 
 	var response eventResponse
@@ -62,7 +63,7 @@ func TestEventHandlerCreateSuccess(t *testing.T) {
 func TestEventHandlerCreateInvalidJSON(t *testing.T) {
 	t.Parallel()
 
-	handler := NewEventHandler(service.NewEventService(&stubEventRepository{}))
+	handler := NewEventHandler(service.NewEventService(&stubEventRepository{}, &stubEventGenerator{}))
 	wrapped := middleware.Auth(func(token string) (string, error) {
 		return "user-1", nil
 	})(http.HandlerFunc(handler.Create))
@@ -98,7 +99,7 @@ func TestEventHandlerGetByIDSuccess(t *testing.T) {
 				},
 			},
 		},
-	}))
+	}, &stubEventGenerator{}))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/events/event-42", nil)
 	rctx := chi.NewRouteContext()
@@ -147,6 +148,10 @@ func (s *stubEventRepository) Create(_ context.Context, _ repo.CreateEventParams
 	return s.createResult, nil
 }
 
+func (s *stubEventRepository) UpdateStatus(_ context.Context, _ string, _ string) error {
+	return nil
+}
+
 func (s *stubEventRepository) ListMine(_ context.Context, _ string) ([]core.Event, error) {
 	return s.listResult, nil
 }
@@ -183,13 +188,19 @@ func (s *stubEventRepository) GetGuestStats(_ context.Context, _ string) (core.E
 	return s.guestStatsResult, s.guestStatsErr
 }
 
+type stubEventGenerator struct{}
+
+func (s *stubEventGenerator) PointSearch(_ context.Context, _ n8n.PointSearchRequest) (n8n.PointSearchResponse, error) {
+	return n8n.PointSearchResponse{}, nil
+}
+
 func TestEventHandlerGetInviteSuccess(t *testing.T) {
 	t.Parallel()
 
 	handler := NewEventHandler(service.NewEventService(&stubEventRepository{
 		roleResult:        "organizer",
 		inviteTokenResult: "invite-123",
-	}))
+	}, &stubEventGenerator{}))
 
 	wrapped := middleware.Auth(func(token string) (string, error) {
 		return "user-1", nil
@@ -214,7 +225,7 @@ func TestEventHandlerJoinByTokenSuccess(t *testing.T) {
 
 	handler := NewEventHandler(service.NewEventService(&stubEventRepository{
 		joinResult: core.Event{ID: "event-2", Status: "published"},
-	}))
+	}, &stubEventGenerator{}))
 
 	wrapped := middleware.Auth(func(token string) (string, error) {
 		return "user-2", nil
@@ -238,7 +249,7 @@ func TestEventHandlerUpdateGuestStatusSuccess(t *testing.T) {
 	handler := NewEventHandler(service.NewEventService(&stubEventRepository{
 		roleResult:             "guest_approved",
 		updateAttendanceResult: core.EventGuest{ID: "guest-1", ApprovalStatus: "approved", AttendanceStatus: "confirmed"},
-	}))
+	}, &stubEventGenerator{}))
 
 	wrapped := middleware.Auth(func(token string) (string, error) {
 		return "user-1", nil

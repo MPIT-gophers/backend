@@ -28,6 +28,7 @@ type UpdateGuestAttendanceParams struct {
 
 type EventRepository interface {
 	Create(ctx context.Context, params CreateEventParams) (core.Event, error)
+	UpdateStatus(ctx context.Context, eventID string, status string) error
 	ListMine(ctx context.Context, userID string) ([]core.Event, error)
 	JoinByToken(ctx context.Context, params JoinEventByTokenParams) (core.Event, error)
 	GetByID(ctx context.Context, eventID string) (core.Event, error)
