@@ -209,7 +209,6 @@ func (h *EventHandler) ListGuests(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateGuestStatusRequest struct {
-	ApprovalStatus   *string `json:"approval_status"`
 	AttendanceStatus *string `json:"attendance_status"`
 }
 
@@ -221,7 +220,7 @@ type UpdateGuestStatusRequest struct {
 // @Security BearerAuth
 // @Param eventID path string true "Event ID"
 // @Param guestID path string true "Guest ID"
-// @Param request body UpdateGuestStatusRequest true "Status update"
+// @Param request body UpdateGuestStatusRequest true "Attendance update"
 // @Success 200 {object} response.SuccessEnvelope{data=core.EventGuest}
 // @Failure 400 {object} response.ErrorEnvelope
 // @Failure 401 {object} response.ErrorEnvelope
@@ -247,7 +246,6 @@ func (h *EventHandler) UpdateGuestStatus(w http.ResponseWriter, r *http.Request)
 	}
 
 	guest, err := h.service.UpdateGuestStatus(r.Context(), userID, eventID, guestID, service.UpdateGuestStatusInput{
-		ApprovalStatus:   req.ApprovalStatus,
 		AttendanceStatus: req.AttendanceStatus,
 	})
 	if err != nil {

@@ -1,5 +1,12 @@
 basePath: /api/v1
 definitions:
+  action.CompleteMAXAuthRequest:
+    properties:
+      init_data:
+        type: string
+      session_id:
+        type: string
+    type: object
   action.CreateEventRequest:
     properties:
       budget:
@@ -12,6 +19,11 @@ definitions:
         type: string
       expected_guest_count:
         type: integer
+    type: object
+  action.ExchangeMAXAuthRequest:
+    properties:
+      session_id:
+        type: string
     type: object
   action.HealthData:
     properties:
@@ -30,6 +42,11 @@ definitions:
       init_data:
         type: string
     type: object
+  action.UpdateGuestStatusRequest:
+    properties:
+      attendance_status:
+        type: string
+    type: object
   action.UpdateMeRequest:
     properties:
       full_name:
@@ -37,6 +54,26 @@ definitions:
       phone:
         type: string
     type: object
+  core.ApprovalStatus:
+    enum:
+    - pending
+    - approved
+    - rejected
+    type: string
+    x-enum-varnames:
+    - ApprovalPending
+    - ApprovalApproved
+    - ApprovalRejected
+  core.AttendanceStatus:
+    enum:
+    - pending
+    - confirmed
+    - declined
+    type: string
+    x-enum-varnames:
+    - AttendancePending
+    - AttendanceConfirmed
+    - AttendanceDeclined
   core.AuthSession:
     properties:
       access_token:
@@ -86,6 +123,42 @@ definitions:
         items:
           $ref: '#/definitions/core.EventVariant'
         type: array
+    type: object
+  core.EventGuest:
+    properties:
+      approval_status:
+        $ref: '#/definitions/core.ApprovalStatus'
+      attendance_status:
+        $ref: '#/definitions/core.AttendanceStatus'
+      created_at:
+        type: string
+      event_id:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: string
+      phone:
+        type: string
+      plus_one_count:
+        type: integer
+      user_id:
+        type: string
+    type: object
+  core.EventGuestStats:
+    properties:
+      approved:
+        type: integer
+      attendance_pending:
+        type: integer
+      confirmed:
+        type: integer
+      declined:
+        type: integer
+      pending_approval:
+        type: integer
+      rejected:
+        type: integer
     type: object
   core.EventLocation:
     properties:
@@ -145,6 +218,28 @@ definitions:
       variant_number:
         type: integer
     type: object
+  core.MAXAuthSession:
+    properties:
+      completed_at:
+        type: string
+      exchanged_at:
+        type: string
+      expires_at:
+        type: string
+      session_id:
+        type: string
+      status:
+        type: string
+    type: object
+  core.MAXAuthStart:
+    properties:
+      expires_at:
+        type: string
+      max_link:
+        type: string
+      session_id:
+        type: string
+    type: object
   core.User:
     properties:
       created_at:
@@ -178,6 +273,86 @@ info:
   title: mpit2026-reg API
   version: 0.1.0
 paths:
+  /auth/max/complete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: MAX auth completion payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.CompleteMAXAuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.MAXAuthSession'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Complete mobile auth flow through MAX initData
+      tags:
+      - auth
+  /auth/max/exchange:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Auth session exchange payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.ExchangeMAXAuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.AuthSession'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Exchange completed MAX auth session for backend JWT
+      tags:
+      - auth
   /auth/max/login:
     post:
       consumes:
@@ -214,6 +389,58 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorEnvelope'
       summary: Login with MAX WebApp initData
+      tags:
+      - auth
+  /auth/max/session/{sessionID}:
+    get:
+      parameters:
+      - description: Auth session ID
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.MAXAuthSession'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Get MAX auth session status
+      tags:
+      - auth
+  /auth/max/start:
+    post:
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.MAXAuthStart'
+              type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Start mobile auth flow through MAX mini app
       tags:
       - auth
   /events:
@@ -295,6 +522,172 @@ paths:
       security:
       - BearerAuth: []
       summary: Get event by id
+      tags:
+      - events
+  /events/{eventID}/guests:
+    get:
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Filter by approval status (pending, approved, rejected)
+        in: query
+        name: approval_status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/core.EventGuest'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List event guests
+      tags:
+      - events
+  /events/{eventID}/guests/{guestID}/status:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Guest ID
+        in: path
+        name: guestID
+        required: true
+        type: string
+      - description: Attendance update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.UpdateGuestStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.EventGuest'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update guest status
+      tags:
+      - events
+  /events/{eventID}/invite:
+    get:
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  properties:
+                    token:
+                      type: string
+                  type: object
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get event invite token
+      tags:
+      - events
+  /events/{eventID}/stats:
+    get:
+      parameters:
+      - description: Event ID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.EventGuestStats'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get event guest statistics
       tags:
       - events
   /events/join-by-token:

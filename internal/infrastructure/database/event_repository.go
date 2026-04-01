@@ -328,38 +328,6 @@ func (r *EventRepository) ListGuests(ctx context.Context, eventID string, approv
 	return guests, nil
 }
 
-func (r *EventRepository) UpdateGuestApprovalStatus(ctx context.Context, params repo.UpdateGuestApprovalParams) (core.EventGuest, error) {
-	guestID, err := parseUUID(params.GuestID)
-	if err != nil {
-		return core.EventGuest{}, errorsstatus.ErrInvalidInput
-	}
-
-	eventID, err := parseUUID(params.EventID)
-	if err != nil {
-		return core.EventGuest{}, errorsstatus.ErrInvalidInput
-	}
-
-	approvedBy, err := parseUUID(params.ApprovedByUserID)
-	if err != nil {
-		return core.EventGuest{}, errorsstatus.ErrInvalidInput
-	}
-
-	row, err := r.queries.UpdateGuestApprovalStatus(ctx, dbsqlc.UpdateGuestApprovalStatusParams{
-		ID:               guestID,
-		EventID:          eventID,
-		ApprovalStatus:   string(params.ApprovalStatus),
-		ApprovedByUserID: approvedBy,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return core.EventGuest{}, errorsstatus.ErrNotFound
-		}
-		return core.EventGuest{}, err
-	}
-
-	return mapUpdateGuestApprovalRow(row), nil
-}
-
 func (r *EventRepository) UpdateGuestAttendanceStatus(ctx context.Context, params repo.UpdateGuestAttendanceParams) (core.EventGuest, error) {
 	guestID, err := parseUUID(params.GuestID)
 	if err != nil {

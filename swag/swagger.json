@@ -8,6 +8,138 @@
     },
     "basePath": "/api/v1",
     "paths": {
+        "/auth/max/complete": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Complete mobile auth flow through MAX initData",
+                "parameters": [
+                    {
+                        "description": "MAX auth completion payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/action.CompleteMAXAuthRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/core.MAXAuthSession"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/max/exchange": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Exchange completed MAX auth session for backend JWT",
+                "parameters": [
+                    {
+                        "description": "Auth session exchange payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/action.ExchangeMAXAuthRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/core.AuthSession"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/max/login": {
             "post": {
                 "consumes": [
@@ -64,6 +196,95 @@
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/max/session/{sessionID}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get MAX auth session status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Auth session ID",
+                        "name": "sessionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/core.MAXAuthSession"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/max/start": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Start mobile auth flow through MAX mini app",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/core.MAXAuthStart"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -327,6 +548,285 @@
                 }
             }
         },
+        "/events/{eventID}/guests": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "List event guests",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "eventID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by approval status (pending, approved, rejected)",
+                        "name": "approval_status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/core.EventGuest"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/events/{eventID}/guests/{guestID}/status": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Update guest status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "eventID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Guest ID",
+                        "name": "guestID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Attendance update",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/action.UpdateGuestStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/core.EventGuest"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/events/{eventID}/invite": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Get event invite token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "eventID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "token": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/events/{eventID}/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Get event guest statistics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "eventID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessEnvelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/core.EventGuestStats"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/healthz": {
             "get": {
                 "produces": [
@@ -452,6 +952,17 @@
         }
     },
     "definitions": {
+        "action.CompleteMAXAuthRequest": {
+            "type": "object",
+            "properties": {
+                "init_data": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                }
+            }
+        },
         "action.CreateEventRequest": {
             "type": "object",
             "properties": {
@@ -469,6 +980,14 @@
                 },
                 "expected_guest_count": {
                     "type": "integer"
+                }
+            }
+        },
+        "action.ExchangeMAXAuthRequest": {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string"
                 }
             }
         },
@@ -499,6 +1018,14 @@
                 }
             }
         },
+        "action.UpdateGuestStatusRequest": {
+            "type": "object",
+            "properties": {
+                "attendance_status": {
+                    "type": "string"
+                }
+            }
+        },
         "action.UpdateMeRequest": {
             "type": "object",
             "properties": {
@@ -509,6 +1036,32 @@
                     "type": "string"
                 }
             }
+        },
+        "core.ApprovalStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "approved",
+                "rejected"
+            ],
+            "x-enum-varnames": [
+                "ApprovalPending",
+                "ApprovalApproved",
+                "ApprovalRejected"
+            ]
+        },
+        "core.AttendanceStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "confirmed",
+                "declined"
+            ],
+            "x-enum-varnames": [
+                "AttendancePending",
+                "AttendanceConfirmed",
+                "AttendanceDeclined"
+            ]
         },
         "core.AuthSession": {
             "type": "object",
@@ -583,6 +1136,61 @@
                     "items": {
                         "$ref": "#/definitions/core.EventVariant"
                     }
+                }
+            }
+        },
+        "core.EventGuest": {
+            "type": "object",
+            "properties": {
+                "approval_status": {
+                    "$ref": "#/definitions/core.ApprovalStatus"
+                },
+                "attendance_status": {
+                    "$ref": "#/definitions/core.AttendanceStatus"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "event_id": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "plus_one_count": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "core.EventGuestStats": {
+            "type": "object",
+            "properties": {
+                "approved": {
+                    "type": "integer"
+                },
+                "attendance_pending": {
+                    "type": "integer"
+                },
+                "confirmed": {
+                    "type": "integer"
+                },
+                "declined": {
+                    "type": "integer"
+                },
+                "pending_approval": {
+                    "type": "integer"
+                },
+                "rejected": {
+                    "type": "integer"
                 }
             }
         },
@@ -671,6 +1279,40 @@
                 },
                 "variant_number": {
                     "type": "integer"
+                }
+            }
+        },
+        "core.MAXAuthSession": {
+            "type": "object",
+            "properties": {
+                "completed_at": {
+                    "type": "string"
+                },
+                "exchanged_at": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "core.MAXAuthStart": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "max_link": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
                 }
             }
         },

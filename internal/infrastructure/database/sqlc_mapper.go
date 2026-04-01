@@ -337,15 +337,6 @@ func mapListEventGuestsRow(row dbsqlc.ListEventGuestsRow) core.EventGuest {
 	)
 }
 
-func mapUpdateGuestApprovalRow(row dbsqlc.UpdateGuestApprovalStatusRow) core.EventGuest {
-	return mapGuestRow(
-		row.ID, row.EventID, row.UserID,
-		row.FullName, row.Phone,
-		row.ApprovalStatus, row.AttendanceStatus,
-		row.PlusOneCount, row.CreatedAt,
-	)
-}
-
 func mapUpdateGuestAttendanceRow(row dbsqlc.UpdateGuestAttendanceStatusRow) core.EventGuest {
 	return mapGuestRow(
 		row.ID, row.EventID, row.UserID,

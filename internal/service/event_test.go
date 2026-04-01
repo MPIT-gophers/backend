@@ -170,28 +170,9 @@ func TestEventServiceListGuests(t *testing.T) {
 func TestEventServiceUpdateGuestStatus(t *testing.T) {
 	t.Parallel()
 
-	t.Run("ApprovalSuccess", func(t *testing.T) {
-		repo := &stubEventRepository{
-			roleResult: "organizer",
-			updateApprovalResult: core.EventGuest{ID: "guest-1", ApprovalStatus: "approved"},
-		}
-		s := NewEventService(repo)
-
-		status := "approved"
-		guest, err := s.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{
-			ApprovalStatus: &status,
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if guest.ApprovalStatus != "approved" {
-			t.Fatalf("unexpected status: %s", guest.ApprovalStatus)
-		}
-	})
-
 	t.Run("AttendanceSuccess", func(t *testing.T) {
 		repo := &stubEventRepository{
-			roleResult: "guest_approved",
+			roleResult:             "guest_approved",
 			updateAttendanceResult: core.EventGuest{ID: "guest-1", AttendanceStatus: "confirmed"},
 		}
 		s := NewEventService(repo)
@@ -210,40 +191,18 @@ func TestEventServiceUpdateGuestStatus(t *testing.T) {
 
 	t.Run("InvalidInputs", func(t *testing.T) {
 		s := NewEventService(&stubEventRepository{})
-		status := "approved"
-		
-		// Missing both
-		_, err := s.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{})
-		if !errors.Is(err, errorsstatus.ErrInvalidInput) {
-			t.Fatalf("expected ErrInvalidInput, got %v", err)
-		}
 
-		// Providing both
-		_, err = s.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{
-			ApprovalStatus: &status, AttendanceStatus: &status,
-		})
+		_, err := s.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{})
 		if !errors.Is(err, errorsstatus.ErrInvalidInput) {
 			t.Fatalf("expected ErrInvalidInput, got %v", err)
 		}
 	})
 
 	t.Run("ForbiddenRoles", func(t *testing.T) {
-		// Guest trying to approve
-		repo1 := &stubEventRepository{roleResult: "guest_approved"}
-		s1 := NewEventService(repo1)
-		status := "approved"
-		_, err := s1.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{
-			ApprovalStatus: &status,
-		})
-		if !errors.Is(err, errorsstatus.ErrForbidden) {
-			t.Fatalf("expected ErrForbidden for guest approving, got %v", err)
-		}
-
-		// Organizer trying to set attendance
-		repo2 := &stubEventRepository{roleResult: "organizer"}
-		s2 := NewEventService(repo2)
+		repo := &stubEventRepository{roleResult: "organizer"}
+		s := NewEventService(repo)
 		attStatus := "confirmed"
-		_, err = s2.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{
+		_, err := s.UpdateGuestStatus(context.Background(), "user-1", "event-1", "guest-1", UpdateGuestStatusInput{
 			AttendanceStatus: &attStatus,
 		})
 		if !errors.Is(err, errorsstatus.ErrForbidden) {
@@ -278,20 +237,16 @@ type stubEventRepository struct {
 	inviteTokenErr         error
 	lastInviteTokenEventID string
 
-	listGuestsResult      []core.EventGuest
-	listGuestsErr         error
-	lastListGuestsFilter  *string
-
-	updateApprovalResult      core.EventGuest
-	updateApprovalErr         error
-	lastUpdateApprovalParams  repo.UpdateGuestApprovalParams
+	listGuestsResult     []core.EventGuest
+	listGuestsErr        error
+	lastListGuestsFilter *string
 
 	updateAttendanceResult     core.EventGuest
 	updateAttendanceErr        error
 	lastUpdateAttendanceParams repo.UpdateGuestAttendanceParams
 
-	guestStatsResult      core.EventGuestStats
-	guestStatsErr         error
+	guestStatsResult core.EventGuestStats
+	guestStatsErr    error
 }
 
 func (s *stubEventRepository) Create(_ context.Context, params repo.CreateEventParams) (core.Event, error) {
@@ -328,11 +283,6 @@ func (s *stubEventRepository) GetInviteToken(_ context.Context, eventID string) 
 func (s *stubEventRepository) ListGuests(_ context.Context, eventID string, filter *string) ([]core.EventGuest, error) {
 	s.lastListGuestsFilter = filter
 	return s.listGuestsResult, s.listGuestsErr
-}
-
-func (s *stubEventRepository) UpdateGuestApprovalStatus(_ context.Context, params repo.UpdateGuestApprovalParams) (core.EventGuest, error) {
-	s.lastUpdateApprovalParams = params
-	return s.updateApprovalResult, s.updateApprovalErr
 }
 
 func (s *stubEventRepository) UpdateGuestAttendanceStatus(_ context.Context, params repo.UpdateGuestAttendanceParams) (core.EventGuest, error) {
