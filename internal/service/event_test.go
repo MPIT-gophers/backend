@@ -293,3 +293,7 @@ func (s *stubEventRepository) UpdateGuestAttendanceStatus(_ context.Context, par
 func (s *stubEventRepository) GetGuestStats(_ context.Context, eventID string) (core.EventGuestStats, error) {
 	return s.guestStatsResult, s.guestStatsErr
 }
+
+func (s *stubEventRepository) GetGuestAttendanceStatus(_ context.Context, eventID string, userID string) (core.AttendanceStatus, error) {
+	return "", nil
+}

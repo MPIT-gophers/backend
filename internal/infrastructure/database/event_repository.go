@@ -377,3 +377,25 @@ func mapEventPgError(err error) error {
 
 	return err
 }
+
+func (r *EventRepository) GetGuestAttendanceStatus(ctx context.Context, eventID string, userID string) (core.AttendanceStatus, error) {
+	eUUID, err := parseUUID(eventID)
+	if err != nil {
+		return "", errorsstatus.ErrInvalidInput
+	}
+	uUUID, err := parseUUID(userID)
+	if err != nil {
+		return "", errorsstatus.ErrInvalidInput
+	}
+
+	var status string
+	err = r.db.QueryRow(ctx, "SELECT attendance_status FROM event_guests WHERE event_id = $1 AND user_id = $2", eUUID, uUUID).Scan(&status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", errorsstatus.ErrNotFound
+		}
+		return "", err
+	}
+
+	return core.AttendanceStatus(status), nil
+}

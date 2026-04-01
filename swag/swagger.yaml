@@ -25,6 +25,11 @@ definitions:
       session_id:
         type: string
     type: object
+  action.FundItemRequest:
+    properties:
+      amount:
+        type: number
+    type: object
   action.HealthData:
     properties:
       database:
@@ -42,8 +47,20 @@ definitions:
       init_data:
         type: string
     type: object
+  action.ParseWishlistRequest:
+    properties:
+      text:
+        type: string
+    type: object
+  action.SubmitGuestIdeaRequest:
+    properties:
+      text:
+        type: string
+    type: object
   action.UpdateGuestStatusRequest:
     properties:
+      approval_status:
+        type: string
       attendance_status:
         type: string
     type: object
@@ -273,6 +290,294 @@ info:
   title: mpit2026-reg API
   version: 0.1.0
 paths:
+  /api/v1/events/{eventID}/photos:
+    get:
+      description: Retrieves a list of photo URLs for the event. Only accessible to
+        confirmed guests or organizers. Pending/declined guests get 403 Forbidden.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: photos array of strings
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid event ID format
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Forbidden (guest not confirmed)
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Get event photos
+      tags:
+      - photos
+  /api/v1/events/{eventID}/photos/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Uploads up to 10 photos as multipart/form-data for the given event.
+        Only guests or organizers can upload. Max file size is 10MB per photo.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Photos to upload
+        in: formData
+        name: photos
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message
+          schema:
+            additionalProperties: true
+            type: object
+        "207":
+          description: 'Multi-Status: Some photos failed to upload'
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "400":
+          description: Bad request or max 10 photos exceeded
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "413":
+          description: Payload too large
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Upload event photos
+      tags:
+      - photos
+  /api/v1/events/{eventID}/wishlist:
+    get:
+      description: Retrieves the wishlist items for the event. Guests see masked details
+        (booked by others is hidden), organizers see everything.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: items array
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid event ID format
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Get event wishlist
+      tags:
+      - wishlist
+  /api/v1/events/{eventID}/wishlist/{itemID}/book:
+    post:
+      description: Allows a guest to book an entire item so others cannot fund or
+        book it. Returns HTTP 409 Conflict if already booked.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Item UUID
+        in: path
+        name: itemID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: message
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid UUID
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Item already booked or has funds
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Book a wishlist item
+      tags:
+      - wishlist
+  /api/v1/events/{eventID}/wishlist/{itemID}/fund:
+    post:
+      consumes:
+      - application/json
+      description: Allows a guest to crowdsource funds for an item. Returns HTTP 409
+        if the item is already fully booked.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Item UUID
+        in: path
+        name: itemID
+        required: true
+        type: string
+      - description: Amount payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.FundItemRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: current_fund amount
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid payload or UUID
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "409":
+          description: Item is already booked
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Fund a wishlist item partially
+      tags:
+      - wishlist
+  /api/v1/events/{eventID}/wishlist/ideas:
+    post:
+      consumes:
+      - application/json
+      description: Validates guest's text against the anti-wishlist using AI. Returns
+        whether allowed or blocked, along with the reasoning.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Idea text payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.SubmitGuestIdeaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: allowed, reason, item
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Failed to submit idea
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Submit a guest gift idea
+      tags:
+      - wishlist
+  /api/v1/events/{eventID}/wishlist/parse:
+    post:
+      consumes:
+      - application/json
+      description: Uses AI to parse freeform text into wishlist and anti-wishlist
+        items. Generates a new wishlist for the event. Only organizers can call this.
+      parameters:
+      - description: Event UUID
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Text payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/action.ParseWishlistRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: items and anti_items arrays
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      summary: Parse raw text into wishlist
+      tags:
+      - wishlist
   /auth/max/complete:
     post:
       consumes:
@@ -578,7 +883,7 @@ paths:
         name: guestID
         required: true
         type: string
-      - description: Attendance update
+      - description: Status update
         in: body
         name: request
         required: true

@@ -37,4 +37,5 @@ type EventRepository interface {
 	ListGuests(ctx context.Context, eventID string, approvalStatus *string) ([]core.EventGuest, error)
 	UpdateGuestAttendanceStatus(ctx context.Context, params UpdateGuestAttendanceParams) (core.EventGuest, error)
 	GetGuestStats(ctx context.Context, eventID string) (core.EventGuestStats, error)
+	GetGuestAttendanceStatus(ctx context.Context, eventID string, userID string) (core.AttendanceStatus, error)
 }
