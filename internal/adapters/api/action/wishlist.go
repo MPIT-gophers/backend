@@ -27,17 +27,19 @@ type ParseWishlistRequest struct {
 }
 
 // ParseWishlist godoc
-// @Summary Parse raw text into wishlist
-// @Description Uses AI to parse freeform text into wishlist and anti-wishlist items. Generates a new wishlist for the event. Only organizers can call this.
+// @Summary Разобрать свободный текст в wishlist и anti-wishlist
+// @Description Принимает произвольный текст и с помощью AI разбирает его на список желаемых подарков и anti-wishlist элементов.
+// @Description Обычно используется организатором события для первичного наполнения wishlist по заметкам, сообщениям или черновому описанию.
+// @Description В ответе возвращаются массивы items и anti_items, сформированные на основе текста.
 // @Tags wishlist
 // @Accept json
 // @Produce json
-// @Param eventID path string true "Event UUID"
-// @Param request body ParseWishlistRequest true "Text payload"
-// @Success 200 {object} map[string]interface{} "items and anti_items arrays"
-// @Failure 400 {object} response.ErrorEnvelope "Bad request"
-// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
-// @Failure 500 {object} response.ErrorEnvelope "Internal server error"
+// @Param eventID path string true "Идентификатор события"
+// @Param request body ParseWishlistRequest true "Тело запроса со свободным текстом для разбора"
+// @Success 200 {object} map[string]interface{} "Сформированные массивы items и anti_items"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный eventID, JSON или пустой текст"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 500 {object} response.ErrorEnvelope "Внутренняя ошибка при AI-разборе wishlist"
 // @Router /api/v1/events/{eventID}/wishlist/parse [post]
 func (h *WishlistHandler) ParseWishlist(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
@@ -71,15 +73,17 @@ func (h *WishlistHandler) ParseWishlist(w http.ResponseWriter, r *http.Request) 
 }
 
 // GetWishlist godoc
-// @Summary Get event wishlist
-// @Description Retrieves the wishlist items for the event. Guests see masked details (booked by others is hidden), organizers see everything.
+// @Summary Получить wishlist события
+// @Description Возвращает список wishlist-позиций, привязанных к событию.
+// @Description Содержимое ответа может зависеть от роли пользователя: организатор видит больше деталей, гостям часть информации может быть скрыта.
+// @Description Метод используется для отображения списка подарков и текущего состояния бронирования или финансирования.
 // @Tags wishlist
 // @Produce json
-// @Param eventID path string true "Event UUID"
-// @Success 200 {object} map[string]interface{} "items array"
-// @Failure 400 {object} response.ErrorEnvelope "Invalid event ID format"
-// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
-// @Failure 500 {object} response.ErrorEnvelope "Internal server error"
+// @Param eventID path string true "Идентификатор события"
+// @Success 200 {object} map[string]interface{} "Массив wishlist-позиций события"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный eventID"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 500 {object} response.ErrorEnvelope "Внутренняя ошибка при получении wishlist"
 // @Router /api/v1/events/{eventID}/wishlist [get]
 func (h *WishlistHandler) GetWishlist(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
@@ -117,17 +121,19 @@ type SubmitGuestIdeaRequest struct {
 }
 
 // SubmitGuestIdea godoc
-// @Summary Submit a guest gift idea
-// @Description Validates guest's text against the anti-wishlist using AI. Returns whether allowed or blocked, along with the reasoning.
+// @Summary Отправить идею подарка от гостя
+// @Description Принимает текстовое предложение гостя и проверяет его на соответствие anti-wishlist ограничениям.
+// @Description В ответе backend возвращает, разрешена ли идея, а если нет — причину блокировки.
+// @Description Если идея допустима, в ответ также может быть возвращён созданный или подобранный item.
 // @Tags wishlist
 // @Accept json
 // @Produce json
-// @Param eventID path string true "Event UUID"
-// @Param request body SubmitGuestIdeaRequest true "Idea text payload"
-// @Success 200 {object} map[string]interface{} "allowed, reason, item"
-// @Failure 400 {object} response.ErrorEnvelope "Invalid request"
-// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
-// @Failure 500 {object} response.ErrorEnvelope "Failed to submit idea"
+// @Param eventID path string true "Идентификатор события"
+// @Param request body SubmitGuestIdeaRequest true "Тело запроса с текстом идеи подарка"
+// @Success 200 {object} map[string]interface{} "Результат проверки идеи: allowed, reason, item"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный eventID, JSON или пустой текст"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 500 {object} response.ErrorEnvelope "Внутренняя ошибка при обработке идеи"
 // @Router /api/v1/events/{eventID}/wishlist/ideas [post]
 func (h *WishlistHandler) SubmitGuestIdea(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
@@ -179,17 +185,19 @@ func (h *WishlistHandler) SubmitGuestIdea(w http.ResponseWriter, r *http.Request
 }
 
 // BookItem godoc
-// @Summary Book a wishlist item
-// @Description Allows a guest to book an entire item so others cannot fund or book it. Returns HTTP 409 Conflict if already booked.
+// @Summary Забронировать wishlist item целиком
+// @Description Позволяет пользователю забронировать конкретный подарок полностью.
+// @Description После бронирования item нельзя частично финансировать или повторно бронировать другим участникам.
+// @Description Если позиция уже занята или по ней уже есть сбор средств, backend вернёт конфликт.
 // @Tags wishlist
 // @Produce json
-// @Param eventID path string true "Event UUID"
-// @Param itemID path string true "Item UUID"
-// @Success 200 {object} map[string]interface{} "message"
-// @Failure 400 {object} response.ErrorEnvelope "Invalid UUID"
-// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
-// @Failure 409 {object} response.ErrorEnvelope "Item already booked or has funds"
-// @Failure 500 {object} response.ErrorEnvelope "Internal Server Error"
+// @Param eventID path string true "Идентификатор события"
+// @Param itemID path string true "Идентификатор wishlist item"
+// @Success 200 {object} map[string]interface{} "Сообщение об успешном бронировании"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный eventID или itemID"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 409 {object} response.ErrorEnvelope "Item уже забронирован или по нему уже есть финансирование"
+// @Failure 500 {object} response.ErrorEnvelope "Внутренняя ошибка при бронировании item"
 // @Router /api/v1/events/{eventID}/wishlist/{itemID}/book [post]
 func (h *WishlistHandler) BookItem(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
@@ -238,19 +246,21 @@ type FundItemRequest struct {
 }
 
 // FundItem godoc
-// @Summary Fund a wishlist item partially
-// @Description Allows a guest to crowdsource funds for an item. Returns HTTP 409 if the item is already fully booked.
+// @Summary Частично профинансировать wishlist item
+// @Description Позволяет пользователю внести сумму в общий сбор средств на конкретный подарок.
+// @Description Используется для сценария коллективного подарка, когда несколько гостей складываются на одну позицию.
+// @Description Если item уже полностью забронирован, backend вернёт конфликт.
 // @Tags wishlist
 // @Accept json
 // @Produce json
-// @Param eventID path string true "Event UUID"
-// @Param itemID path string true "Item UUID"
-// @Param request body FundItemRequest true "Amount payload"
-// @Success 200 {object} map[string]interface{} "current_fund amount"
-// @Failure 400 {object} response.ErrorEnvelope "Invalid payload or UUID"
-// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
-// @Failure 409 {object} response.ErrorEnvelope "Item is already booked"
-// @Failure 500 {object} response.ErrorEnvelope "Internal Server Error"
+// @Param eventID path string true "Идентификатор события"
+// @Param itemID path string true "Идентификатор wishlist item"
+// @Param request body FundItemRequest true "Тело запроса с суммой пополнения"
+// @Success 200 {object} map[string]interface{} "Текущее накопленное значение current_fund"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный eventID, itemID, JSON или сумма"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 409 {object} response.ErrorEnvelope "Item уже полностью забронирован"
+// @Failure 500 {object} response.ErrorEnvelope "Внутренняя ошибка при пополнении сбора"
 // @Router /api/v1/events/{eventID}/wishlist/{itemID}/fund [post]
 func (h *WishlistHandler) FundItem(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")

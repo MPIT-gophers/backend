@@ -24,11 +24,14 @@ func NewHealthHandler(db *pgxpool.Pool) *HealthHandler {
 }
 
 // Get godoc
-// @Summary Healthcheck
+// @Summary Проверить состояние сервиса
+// @Description Выполняет базовую healthcheck-проверку backend-сервиса.
+// @Description Endpoint дополнительно проверяет доступность PostgreSQL через Ping.
+// @Description Если приложение живо, но база недоступна, метод вернёт 503 и укажет database=unavailable.
 // @Tags health
 // @Produce json
-// @Success 200 {object} response.SuccessEnvelope{data=HealthData}
-// @Success 503 {object} response.SuccessEnvelope{data=HealthData}
+// @Success 200 {object} response.SuccessEnvelope{data=HealthData} "Сервис и база доступны"
+// @Success 503 {object} response.SuccessEnvelope{data=HealthData} "Сервис отвечает, но база недоступна"
 // @Router /healthz [get]
 func (h *HealthHandler) Get(w http.ResponseWriter, r *http.Request) {
 	status := http.StatusOK

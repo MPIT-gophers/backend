@@ -30,16 +30,19 @@ type CreateEventRequest struct {
 }
 
 // Create godoc
-// @Summary Create event
+// @Summary Создать событие
+// @Description Создаёт новое событие от имени текущего авторизованного пользователя.
+// @Description Организатором события автоматически становится пользователь из Bearer JWT.
+// @Description В запросе нужно передать базовые параметры события: город, дату, время, ожидаемое число гостей и бюджет.
 // @Tags events
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body CreateEventRequest true "Event payload"
-// @Success 201 {object} response.SuccessEnvelope{data=core.Event}
-// @Failure 400 {object} response.ErrorEnvelope
-// @Failure 401 {object} response.ErrorEnvelope
-// @Failure 409 {object} response.ErrorEnvelope
+// @Param request body CreateEventRequest true "Тело запроса с параметрами события"
+// @Success 201 {object} response.SuccessEnvelope{data=core.Event} "Событие успешно создано"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный JSON или ошибка валидации полей"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 409 {object} response.ErrorEnvelope "Конфликт при создании события"
 // @Router /events [post]
 func (h *EventHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
@@ -73,12 +76,15 @@ func (h *EventHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListMine godoc
-// @Summary List my events
+// @Summary Получить список моих событий
+// @Description Возвращает список событий, к которым текущий пользователь имеет отношение.
+// @Description В выборку попадают события, где пользователь является организатором, соорганизатором или гостем.
+// @Description Для каждого события backend дополнительно возвращает access_role и связанные статусы гостя, если они применимы.
 // @Tags events
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.SuccessEnvelope{data=[]core.Event}
-// @Failure 401 {object} response.ErrorEnvelope
+// @Success 200 {object} response.SuccessEnvelope{data=[]core.Event} "Список событий текущего пользователя"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
 // @Router /events/my [get]
 func (h *EventHandler) ListMine(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
@@ -101,17 +107,20 @@ type JoinEventByTokenRequest struct {
 }
 
 // JoinByToken godoc
-// @Summary Join event by invite token
+// @Summary Войти в событие по invite token
+// @Description Добавляет текущего пользователя в событие по invite token.
+// @Description Токен должен быть активным и принадлежать существующему событию.
+// @Description После успешного входа backend возвращает карточку события с ролью доступа пользователя в этом событии.
 // @Tags events
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body JoinEventByTokenRequest true "Join event payload"
-// @Success 200 {object} response.SuccessEnvelope{data=core.Event}
-// @Failure 400 {object} response.ErrorEnvelope
-// @Failure 401 {object} response.ErrorEnvelope
-// @Failure 404 {object} response.ErrorEnvelope
-// @Failure 409 {object} response.ErrorEnvelope
+// @Param request body JoinEventByTokenRequest true "Тело запроса с invite token"
+// @Success 200 {object} response.SuccessEnvelope{data=core.Event} "Пользователь успешно добавлен в событие"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный JSON или пустой token"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 404 {object} response.ErrorEnvelope "Invite token не найден или недействителен"
+// @Failure 409 {object} response.ErrorEnvelope "Конфликт при присоединении к событию"
 // @Router /events/join-by-token [post]
 func (h *EventHandler) JoinByToken(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
@@ -139,16 +148,19 @@ func (h *EventHandler) JoinByToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetByID godoc
-// @Summary Get event by id
+// @Summary Получить событие по ID
+// @Description Возвращает полную карточку события по его идентификатору.
+// @Description Доступ к методу ограничен middleware авторизации и проверкой прав доступа к конкретному событию.
+// @Description Если у пользователя нет права читать событие, backend вернёт 403.
 // @Tags events
 // @Produce json
 // @Security BearerAuth
-// @Param eventID path string true "Event ID"
-// @Success 200 {object} response.SuccessEnvelope{data=core.Event}
-// @Failure 400 {object} response.ErrorEnvelope
-// @Failure 401 {object} response.ErrorEnvelope
-// @Failure 403 {object} response.ErrorEnvelope
-// @Failure 404 {object} response.ErrorEnvelope
+// @Param eventID path string true "Идентификатор события"
+// @Success 200 {object} response.SuccessEnvelope{data=core.Event} "Карточка события"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный eventID"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 403 {object} response.ErrorEnvelope "Недостаточно прав для чтения события"
+// @Failure 404 {object} response.ErrorEnvelope "Событие не найдено"
 // @Router /events/{eventID} [get]
 func (h *EventHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	eventID := chi.URLParam(r, "eventID")
@@ -162,15 +174,17 @@ func (h *EventHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetInvite godoc
-// @Summary Get event invite token
+// @Summary Получить invite token события
+// @Description Возвращает активный invite token для указанного события.
+// @Description Обычно используется организатором или соорганизатором, чтобы передать ссылку или token приглашённому пользователю.
 // @Tags events
 // @Produce json
 // @Security BearerAuth
-// @Param eventID path string true "Event ID"
-// @Success 200 {object} response.SuccessEnvelope{data=object{token=string}}
-// @Failure 401 {object} response.ErrorEnvelope
-// @Failure 403 {object} response.ErrorEnvelope
-// @Failure 404 {object} response.ErrorEnvelope
+// @Param eventID path string true "Идентификатор события"
+// @Success 200 {object} response.SuccessEnvelope{data=object{token=string}} "Активный invite token события"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 403 {object} response.ErrorEnvelope "Недостаточно прав для просмотра invite token"
+// @Failure 404 {object} response.ErrorEnvelope "Событие или invite token не найдены"
 // @Router /events/{eventID}/invite [get]
 func (h *EventHandler) GetInvite(w http.ResponseWriter, r *http.Request) {
 	eventID := chi.URLParam(r, "eventID")
@@ -185,15 +199,18 @@ func (h *EventHandler) GetInvite(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListGuests godoc
-// @Summary List event guests
+// @Summary Получить список гостей события
+// @Description Возвращает список гостей, связанных с указанным событием.
+// @Description Можно дополнительно отфильтровать список по approval_status через query-параметр.
+// @Description Доступ к методу ограничен проверкой прав на чтение события.
 // @Tags events
 // @Produce json
 // @Security BearerAuth
-// @Param eventID path string true "Event ID"
-// @Param approval_status query string false "Filter by approval status (pending, approved, rejected)"
-// @Success 200 {object} response.SuccessEnvelope{data=[]core.EventGuest}
-// @Failure 401 {object} response.ErrorEnvelope
-// @Failure 403 {object} response.ErrorEnvelope
+// @Param eventID path string true "Идентификатор события"
+// @Param approval_status query string false "Фильтр по статусу подтверждения: pending, approved, rejected"
+// @Success 200 {object} response.SuccessEnvelope{data=[]core.EventGuest} "Список гостей события"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 403 {object} response.ErrorEnvelope "Недостаточно прав для просмотра гостей"
 // @Router /events/{eventID}/guests [get]
 func (h *EventHandler) ListGuests(w http.ResponseWriter, r *http.Request) {
 	eventID := chi.URLParam(r, "eventID")
@@ -213,19 +230,22 @@ type UpdateGuestStatusRequest struct {
 }
 
 // UpdateGuestStatus godoc
-// @Summary Update guest status
+// @Summary Обновить статус посещения гостя
+// @Description Обновляет attendance_status конкретного гостя в рамках события.
+// @Description Метод предназначен для сценария, когда сам пользователь подтверждает или отклоняет своё участие.
+// @Description Организатор и co_host не могут использовать этот endpoint для управления посещаемостью других пользователей.
 // @Tags events
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param eventID path string true "Event ID"
-// @Param guestID path string true "Guest ID"
-// @Param request body UpdateGuestStatusRequest true "Attendance update"
-// @Success 200 {object} response.SuccessEnvelope{data=core.EventGuest}
-// @Failure 400 {object} response.ErrorEnvelope
-// @Failure 401 {object} response.ErrorEnvelope
-// @Failure 403 {object} response.ErrorEnvelope
-// @Failure 404 {object} response.ErrorEnvelope
+// @Param eventID path string true "Идентификатор события"
+// @Param guestID path string true "Идентификатор гостя"
+// @Param request body UpdateGuestStatusRequest true "Тело запроса с attendance_status"
+// @Success 200 {object} response.SuccessEnvelope{data=core.EventGuest} "Статус посещения успешно обновлён"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный JSON, eventID, guestID или attendance_status"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 403 {object} response.ErrorEnvelope "Недостаточно прав для обновления статуса посещения"
+// @Failure 404 {object} response.ErrorEnvelope "Гость не найден"
 // @Router /events/{eventID}/guests/{guestID}/status [patch]
 func (h *EventHandler) UpdateGuestStatus(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
@@ -257,14 +277,17 @@ func (h *EventHandler) UpdateGuestStatus(w http.ResponseWriter, r *http.Request)
 }
 
 // GetGuestStats godoc
-// @Summary Get event guest statistics
+// @Summary Получить статистику по гостям события
+// @Description Возвращает агрегированную статистику по гостям указанного события.
+// @Description В ответ включаются счётчики по approval_status и attendance_status.
+// @Description Метод полезен для дашбордов, карточек события и административных экранов.
 // @Tags events
 // @Produce json
 // @Security BearerAuth
-// @Param eventID path string true "Event ID"
-// @Success 200 {object} response.SuccessEnvelope{data=core.EventGuestStats}
-// @Failure 401 {object} response.ErrorEnvelope
-// @Failure 403 {object} response.ErrorEnvelope
+// @Param eventID path string true "Идентификатор события"
+// @Success 200 {object} response.SuccessEnvelope{data=core.EventGuestStats} "Статистика по гостям события"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 403 {object} response.ErrorEnvelope "Недостаточно прав для просмотра статистики"
 // @Router /events/{eventID}/stats [get]
 func (h *EventHandler) GetGuestStats(w http.ResponseWriter, r *http.Request) {
 	eventID := chi.URLParam(r, "eventID")

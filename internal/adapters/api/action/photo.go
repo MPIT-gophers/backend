@@ -26,18 +26,20 @@ func NewPhotoHandler(s service.PhotoService) *PhotoHandler {
 }
 
 // UploadPhotos godoc
-// @Summary Upload event photos
-// @Description Uploads up to 10 photos as multipart/form-data for the given event. Only guests or organizers can upload. Max file size is 10MB per photo.
+// @Summary Загрузить фотографии события
+// @Description Принимает multipart/form-data с набором файлов и загружает фотографии в контекст указанного события.
+// @Description За один запрос можно загрузить не более 10 файлов.
+// @Description Метод предназначен для гостей и организаторов события; размер входного multipart-пакета ограничен backend-логикой.
 // @Tags photos
 // @Accept mpfd
 // @Produce json
-// @Param eventID path string true "Event UUID"
-// @Param photos formData file true "Photos to upload"
-// @Success 200 {object} map[string]interface{} "message"
-// @Failure 400 {object} response.ErrorEnvelope "Bad request or max 10 photos exceeded"
-// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
-// @Failure 413 {object} response.ErrorEnvelope "Payload too large"
-// @Failure 207 {object} response.ErrorEnvelope "Multi-Status: Some photos failed to upload"
+// @Param eventID path string true "Идентификатор события"
+// @Param photos formData file true "Один или несколько файлов фотографий"
+// @Success 200 {object} map[string]interface{} "Фотографии успешно загружены"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный eventID, отсутствие файлов или превышение лимита количества"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 413 {object} response.ErrorEnvelope "Слишком большой multipart-запрос"
+// @Failure 207 {object} response.ErrorEnvelope "Часть файлов загрузилась, часть завершилась ошибкой"
 // @Router /api/v1/events/{eventID}/photos/upload [post]
 func (h *PhotoHandler) UploadPhotos(w http.ResponseWriter, r *http.Request) {
 	eventIDStr := chi.URLParam(r, "eventID")
@@ -116,16 +118,18 @@ func (h *PhotoHandler) UploadPhotos(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPhotos godoc
-// @Summary Get event photos
-// @Description Retrieves a list of photo URLs for the event. Only accessible to confirmed guests or organizers. Pending/declined guests get 403 Forbidden.
+// @Summary Получить фотографии события
+// @Description Возвращает список URL фотографий, привязанных к событию.
+// @Description Доступ к фотографиям есть только у пользователей, которым разрешено читать событие и связанные с ним материалы.
+// @Description Если у пользователя недостаточно прав, backend вернёт 403.
 // @Tags photos
 // @Produce json
-// @Param eventID path string true "Event UUID"
-// @Success 200 {object} map[string]interface{} "photos array of strings"
-// @Failure 400 {object} response.ErrorEnvelope "Invalid event ID format"
-// @Failure 401 {object} response.ErrorEnvelope "Unauthorized"
-// @Failure 403 {object} response.ErrorEnvelope "Forbidden (guest not confirmed)"
-// @Failure 500 {object} response.ErrorEnvelope "Internal server error"
+// @Param eventID path string true "Идентификатор события"
+// @Success 200 {object} map[string]interface{} "Массив URL фотографий события"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный eventID"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 403 {object} response.ErrorEnvelope "Недостаточно прав для просмотра фотографий"
+// @Failure 500 {object} response.ErrorEnvelope "Внутренняя ошибка при получении списка фотографий"
 // @Router /api/v1/events/{eventID}/photos [get]
 func (h *PhotoHandler) GetPhotos(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

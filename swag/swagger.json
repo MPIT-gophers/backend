@@ -14,18 +14,18 @@
     "paths": {
         "/api/v1/events/{eventID}/photos": {
             "get": {
-                "description": "Retrieves a list of photo URLs for the event. Only accessible to confirmed guests or organizers. Pending/declined guests get 403 Forbidden.",
+                "description": "Возвращает список URL фотографий, привязанных к событию.\nДоступ к фотографиям есть только у пользователей, которым разрешено читать событие и связанные с ним материалы.\nЕсли у пользователя недостаточно прав, backend вернёт 403.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "photos"
                 ],
-                "summary": "Get event photos",
+                "summary": "Получить фотографии события",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event UUID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
@@ -33,32 +33,32 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "photos array of strings",
+                        "description": "Массив URL фотографий события",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "400": {
-                        "description": "Invalid event ID format",
+                        "description": "Некорректный eventID",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "403": {
-                        "description": "Forbidden (guest not confirmed)",
+                        "description": "Недостаточно прав для просмотра фотографий",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Внутренняя ошибка при получении списка фотографий",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -68,7 +68,7 @@
         },
         "/api/v1/events/{eventID}/photos/upload": {
             "post": {
-                "description": "Uploads up to 10 photos as multipart/form-data for the given event. Only guests or organizers can upload. Max file size is 10MB per photo.",
+                "description": "Принимает multipart/form-data с набором файлов и загружает фотографии в контекст указанного события.\nЗа один запрос можно загрузить не более 10 файлов.\nМетод предназначен для гостей и организаторов события; размер входного multipart-пакета ограничен backend-логикой.",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -78,18 +78,18 @@
                 "tags": [
                     "photos"
                 ],
-                "summary": "Upload event photos",
+                "summary": "Загрузить фотографии события",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event UUID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "file",
-                        "description": "Photos to upload",
+                        "description": "Один или несколько файлов фотографий",
                         "name": "photos",
                         "in": "formData",
                         "required": true
@@ -97,32 +97,32 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "message",
+                        "description": "Фотографии успешно загружены",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "207": {
-                        "description": "Multi-Status: Some photos failed to upload",
+                        "description": "Часть файлов загрузилась, часть завершилась ошибкой",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "400": {
-                        "description": "Bad request or max 10 photos exceeded",
+                        "description": "Некорректный eventID, отсутствие файлов или превышение лимита количества",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "413": {
-                        "description": "Payload too large",
+                        "description": "Слишком большой multipart-запрос",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -132,18 +132,18 @@
         },
         "/api/v1/events/{eventID}/wishlist": {
             "get": {
-                "description": "Retrieves the wishlist items for the event. Guests see masked details (booked by others is hidden), organizers see everything.",
+                "description": "Возвращает список wishlist-позиций, привязанных к событию.\nСодержимое ответа может зависеть от роли пользователя: организатор видит больше деталей, гостям часть информации может быть скрыта.\nМетод используется для отображения списка подарков и текущего состояния бронирования или финансирования.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "wishlist"
                 ],
-                "summary": "Get event wishlist",
+                "summary": "Получить wishlist события",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event UUID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
@@ -151,26 +151,26 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "items array",
+                        "description": "Массив wishlist-позиций события",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "400": {
-                        "description": "Invalid event ID format",
+                        "description": "Некорректный eventID",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Внутренняя ошибка при получении wishlist",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -180,7 +180,7 @@
         },
         "/api/v1/events/{eventID}/wishlist/ideas": {
             "post": {
-                "description": "Validates guest's text against the anti-wishlist using AI. Returns whether allowed or blocked, along with the reasoning.",
+                "description": "Принимает текстовое предложение гостя и проверяет его на соответствие anti-wishlist ограничениям.\nВ ответе backend возвращает, разрешена ли идея, а если нет — причину блокировки.\nЕсли идея допустима, в ответ также может быть возвращён созданный или подобранный item.",
                 "consumes": [
                     "application/json"
                 ],
@@ -190,17 +190,17 @@
                 "tags": [
                     "wishlist"
                 ],
-                "summary": "Submit a guest gift idea",
+                "summary": "Отправить идею подарка от гостя",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event UUID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Idea text payload",
+                        "description": "Тело запроса с текстом идеи подарка",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -211,26 +211,26 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "allowed, reason, item",
+                        "description": "Результат проверки идеи: allowed, reason, item",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "400": {
-                        "description": "Invalid request",
+                        "description": "Некорректный eventID, JSON или пустой текст",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "500": {
-                        "description": "Failed to submit idea",
+                        "description": "Внутренняя ошибка при обработке идеи",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -240,7 +240,7 @@
         },
         "/api/v1/events/{eventID}/wishlist/parse": {
             "post": {
-                "description": "Uses AI to parse freeform text into wishlist and anti-wishlist items. Generates a new wishlist for the event. Only organizers can call this.",
+                "description": "Принимает произвольный текст и с помощью AI разбирает его на список желаемых подарков и anti-wishlist элементов.\nОбычно используется организатором события для первичного наполнения wishlist по заметкам, сообщениям или черновому описанию.\nВ ответе возвращаются массивы items и anti_items, сформированные на основе текста.",
                 "consumes": [
                     "application/json"
                 ],
@@ -250,17 +250,17 @@
                 "tags": [
                     "wishlist"
                 ],
-                "summary": "Parse raw text into wishlist",
+                "summary": "Разобрать свободный текст в wishlist и anti-wishlist",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event UUID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Text payload",
+                        "description": "Тело запроса со свободным текстом для разбора",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -271,26 +271,26 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "items and anti_items arrays",
+                        "description": "Сформированные массивы items и anti_items",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "400": {
-                        "description": "Bad request",
+                        "description": "Некорректный eventID, JSON или пустой текст",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Внутренняя ошибка при AI-разборе wishlist",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -300,25 +300,25 @@
         },
         "/api/v1/events/{eventID}/wishlist/{itemID}/book": {
             "post": {
-                "description": "Allows a guest to book an entire item so others cannot fund or book it. Returns HTTP 409 Conflict if already booked.",
+                "description": "Позволяет пользователю забронировать конкретный подарок полностью.\nПосле бронирования item нельзя частично финансировать или повторно бронировать другим участникам.\nЕсли позиция уже занята или по ней уже есть сбор средств, backend вернёт конфликт.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "wishlist"
                 ],
-                "summary": "Book a wishlist item",
+                "summary": "Забронировать wishlist item целиком",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event UUID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Item UUID",
+                        "description": "Идентификатор wishlist item",
                         "name": "itemID",
                         "in": "path",
                         "required": true
@@ -326,32 +326,32 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "message",
+                        "description": "Сообщение об успешном бронировании",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "400": {
-                        "description": "Invalid UUID",
+                        "description": "Некорректный eventID или itemID",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "409": {
-                        "description": "Item already booked or has funds",
+                        "description": "Item уже забронирован или по нему уже есть финансирование",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Внутренняя ошибка при бронировании item",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -361,7 +361,7 @@
         },
         "/api/v1/events/{eventID}/wishlist/{itemID}/fund": {
             "post": {
-                "description": "Allows a guest to crowdsource funds for an item. Returns HTTP 409 if the item is already fully booked.",
+                "description": "Позволяет пользователю внести сумму в общий сбор средств на конкретный подарок.\nИспользуется для сценария коллективного подарка, когда несколько гостей складываются на одну позицию.\nЕсли item уже полностью забронирован, backend вернёт конфликт.",
                 "consumes": [
                     "application/json"
                 ],
@@ -371,24 +371,24 @@
                 "tags": [
                     "wishlist"
                 ],
-                "summary": "Fund a wishlist item partially",
+                "summary": "Частично профинансировать wishlist item",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event UUID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Item UUID",
+                        "description": "Идентификатор wishlist item",
                         "name": "itemID",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Amount payload",
+                        "description": "Тело запроса с суммой пополнения",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -399,32 +399,32 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "current_fund amount",
+                        "description": "Текущее накопленное значение current_fund",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "400": {
-                        "description": "Invalid payload or UUID",
+                        "description": "Некорректный eventID, itemID, JSON или сумма",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "409": {
-                        "description": "Item is already booked",
+                        "description": "Item уже полностью забронирован",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Внутренняя ошибка при пополнении сбора",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -728,6 +728,7 @@
                         "BearerAuth": []
                     }
                 ],
+                "description": "Создаёт новое событие от имени текущего авторизованного пользователя.\nОрганизатором события автоматически становится пользователь из Bearer JWT.\nВ запросе нужно передать базовые параметры события: город, дату, время, ожидаемое число гостей и бюджет.",
                 "consumes": [
                     "application/json"
                 ],
@@ -737,10 +738,10 @@
                 "tags": [
                     "events"
                 ],
-                "summary": "Create event",
+                "summary": "Создать событие",
                 "parameters": [
                     {
-                        "description": "Event payload",
+                        "description": "Тело запроса с параметрами события",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -751,7 +752,7 @@
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created",
+                        "description": "Событие успешно создано",
                         "schema": {
                             "allOf": [
                                 {
@@ -769,19 +770,19 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Некорректный JSON или ошибка валидации полей",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "409": {
-                        "description": "Conflict",
+                        "description": "Конфликт при создании события",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -796,6 +797,7 @@
                         "BearerAuth": []
                     }
                 ],
+                "description": "Добавляет текущего пользователя в событие по invite token.\nТокен должен быть активным и принадлежать существующему событию.\nПосле успешного входа backend возвращает карточку события с ролью доступа пользователя в этом событии.",
                 "consumes": [
                     "application/json"
                 ],
@@ -805,10 +807,10 @@
                 "tags": [
                     "events"
                 ],
-                "summary": "Join event by invite token",
+                "summary": "Войти в событие по invite token",
                 "parameters": [
                     {
-                        "description": "Join event payload",
+                        "description": "Тело запроса с invite token",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -819,7 +821,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Пользователь успешно добавлен в событие",
                         "schema": {
                             "allOf": [
                                 {
@@ -837,25 +839,25 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Некорректный JSON или пустой token",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Invite token не найден или недействителен",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "409": {
-                        "description": "Conflict",
+                        "description": "Конфликт при присоединении к событию",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -870,16 +872,17 @@
                         "BearerAuth": []
                     }
                 ],
+                "description": "Возвращает список событий, к которым текущий пользователь имеет отношение.\nВ выборку попадают события, где пользователь является организатором, соорганизатором или гостем.\nДля каждого события backend дополнительно возвращает access_role и связанные статусы гостя, если они применимы.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "events"
                 ],
-                "summary": "List my events",
+                "summary": "Получить список моих событий",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Список событий текущего пользователя",
                         "schema": {
                             "allOf": [
                                 {
@@ -900,7 +903,7 @@
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -915,17 +918,18 @@
                         "BearerAuth": []
                     }
                 ],
+                "description": "Возвращает полную карточку события по его идентификатору.\nДоступ к методу ограничен middleware авторизации и проверкой прав доступа к конкретному событию.\nЕсли у пользователя нет права читать событие, backend вернёт 403.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "events"
                 ],
-                "summary": "Get event by id",
+                "summary": "Получить событие по ID",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event ID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
@@ -933,7 +937,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Карточка события",
                         "schema": {
                             "allOf": [
                                 {
@@ -951,25 +955,25 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Некорректный eventID",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "403": {
-                        "description": "Forbidden",
+                        "description": "Недостаточно прав для чтения события",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Событие не найдено",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -984,31 +988,32 @@
                         "BearerAuth": []
                     }
                 ],
+                "description": "Возвращает список гостей, связанных с указанным событием.\nМожно дополнительно отфильтровать список по approval_status через query-параметр.\nДоступ к методу ограничен проверкой прав на чтение события.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "events"
                 ],
-                "summary": "List event guests",
+                "summary": "Получить список гостей события",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event ID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Filter by approval status (pending, approved, rejected)",
+                        "description": "Фильтр по статусу подтверждения: pending, approved, rejected",
                         "name": "approval_status",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Список гостей события",
                         "schema": {
                             "allOf": [
                                 {
@@ -1029,13 +1034,13 @@
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "403": {
-                        "description": "Forbidden",
+                        "description": "Недостаточно прав для просмотра гостей",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -1050,6 +1055,7 @@
                         "BearerAuth": []
                     }
                 ],
+                "description": "Обновляет attendance_status конкретного гостя в рамках события.\nМетод предназначен для сценария, когда сам пользователь подтверждает или отклоняет своё участие.\nОрганизатор и co_host не могут использовать этот endpoint для управления посещаемостью других пользователей.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1059,24 +1065,24 @@
                 "tags": [
                     "events"
                 ],
-                "summary": "Update guest status",
+                "summary": "Обновить статус посещения гостя",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event ID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Guest ID",
+                        "description": "Идентификатор гостя",
                         "name": "guestID",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Attendance update",
+                        "description": "Тело запроса с attendance_status",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -1087,7 +1093,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Статус посещения успешно обновлён",
                         "schema": {
                             "allOf": [
                                 {
@@ -1105,25 +1111,25 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Некорректный JSON, eventID, guestID или attendance_status",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "403": {
-                        "description": "Forbidden",
+                        "description": "Недостаточно прав для обновления статуса посещения",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Гость не найден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -1138,17 +1144,18 @@
                         "BearerAuth": []
                     }
                 ],
+                "description": "Возвращает активный invite token для указанного события.\nОбычно используется организатором или соорганизатором, чтобы передать ссылку или token приглашённому пользователю.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "events"
                 ],
-                "summary": "Get event invite token",
+                "summary": "Получить invite token события",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event ID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
@@ -1156,7 +1163,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Активный invite token события",
                         "schema": {
                             "allOf": [
                                 {
@@ -1179,19 +1186,19 @@
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "403": {
-                        "description": "Forbidden",
+                        "description": "Недостаточно прав для просмотра invite token",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Событие или invite token не найдены",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -1206,17 +1213,18 @@
                         "BearerAuth": []
                     }
                 ],
+                "description": "Возвращает агрегированную статистику по гостям указанного события.\nВ ответ включаются счётчики по approval_status и attendance_status.\nМетод полезен для дашбордов, карточек события и административных экранов.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "events"
                 ],
-                "summary": "Get event guest statistics",
+                "summary": "Получить статистику по гостям события",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event ID",
+                        "description": "Идентификатор события",
                         "name": "eventID",
                         "in": "path",
                         "required": true
@@ -1224,7 +1232,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Статистика по гостям события",
                         "schema": {
                             "allOf": [
                                 {
@@ -1242,13 +1250,13 @@
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "JWT отсутствует или невалиден",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
                     },
                     "403": {
-                        "description": "Forbidden",
+                        "description": "Недостаточно прав для просмотра статистики",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorEnvelope"
                         }
@@ -1258,16 +1266,17 @@
         },
         "/healthz": {
             "get": {
+                "description": "Выполняет базовую healthcheck-проверку backend-сервиса.\nEndpoint дополнительно проверяет доступность PostgreSQL через Ping.\nЕсли приложение живо, но база недоступна, метод вернёт 503 и укажет database=unavailable.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "health"
                 ],
-                "summary": "Healthcheck",
+                "summary": "Проверить состояние сервиса",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Сервис и база доступны",
                         "schema": {
                             "allOf": [
                                 {
@@ -1285,7 +1294,7 @@
                         }
                     },
                     "503": {
-                        "description": "Service Unavailable",
+                        "description": "Сервис отвечает, но база недоступна",
                         "schema": {
                             "allOf": [
                                 {
