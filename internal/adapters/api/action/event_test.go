@@ -128,11 +128,12 @@ func TestEventHandlerGetByIDSuccess(t *testing.T) {
 }
 
 type stubEventRepository struct {
-	createResult core.Event
-	listResult   []core.Event
-	joinResult   core.Event
-	getResult    core.Event
-	roleResult   string
+	createResult        core.Event
+	listResult          []core.Event
+	joinResult          core.Event
+	getResult           core.Event
+	roleResult          string
+	selectVariantResult core.Event
 
 	inviteTokenResult      string
 	inviteTokenErr         error
@@ -170,6 +171,10 @@ func (s *stubEventRepository) JoinByToken(_ context.Context, _ repo.JoinEventByT
 
 func (s *stubEventRepository) GetByID(_ context.Context, _ string) (core.Event, error) {
 	return s.getResult, nil
+}
+
+func (s *stubEventRepository) SelectVariant(_ context.Context, _ string, _ string) (core.Event, error) {
+	return s.selectVariantResult, nil
 }
 
 func (s *stubEventRepository) GetAccessRole(_ context.Context, _ string, _ string) (string, error) {
@@ -269,6 +274,36 @@ func TestEventHandlerUpdateGuestStatusSuccess(t *testing.T) {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("eventID", "event-1")
 	rctx.URLParams.Add("guestID", "guest-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	rec := httptest.NewRecorder()
+	wrapped.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestEventHandlerSelectVariantSuccess(t *testing.T) {
+	t.Parallel()
+
+	handler := NewEventHandler(service.NewEventService(&stubEventRepository{
+		roleResult: "organizer",
+		selectVariantResult: core.Event{
+			ID:                "event-1",
+			SelectedVariantID: strPtr("variant-1"),
+		},
+	}, &stubEventGenerator{}))
+
+	wrapped := middleware.Auth(func(token string) (string, error) {
+		return "user-1", nil
+	})(http.HandlerFunc(handler.SelectVariant))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/events/event-1/variants/variant-1/select", nil)
+	req.Header.Set("Authorization", "Bearer good-token")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("eventID", "event-1")
+	rctx.URLParams.Add("variantID", "variant-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 	rec := httptest.NewRecorder()

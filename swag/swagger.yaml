@@ -1073,6 +1073,55 @@ paths:
       summary: Получить статистику по гостям события
       tags:
       - events
+  /events/{eventID}/variants/{variantID}/select:
+    post:
+      description: |-
+        Устанавливает selected_variant_id для события.
+        Выбор доступен только организатору события.
+      parameters:
+      - description: Идентификатор события
+        in: path
+        name: eventID
+        required: true
+        type: string
+      - description: Идентификатор варианта события
+        in: path
+        name: variantID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Вариант успешно выбран
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessEnvelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/core.Event'
+              type: object
+        "400":
+          description: Некорректный eventID или variantID
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "401":
+          description: JWT отсутствует или невалиден
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "403":
+          description: Выбор варианта доступен только организатору
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+        "404":
+          description: Событие или вариант не найдены
+          schema:
+            $ref: '#/definitions/response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Выбрать итоговый вариант события
+      tags:
+      - events
   /events/join-by-token:
     post:
       consumes:

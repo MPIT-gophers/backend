@@ -111,6 +111,7 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 				r.Get("/invite", eventHandler.GetInvite)
 				r.Get("/guests", eventHandler.ListGuests)
 				r.Get("/stats", eventHandler.GetGuestStats)
+				r.Post("/variants/{variantID}/select", eventHandler.SelectVariant)
 				r.Patch("/guests/{guestID}/status", eventHandler.UpdateGuestStatus)
 
 				// Wishlist

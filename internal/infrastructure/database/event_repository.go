@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"eventAI/internal/entities/core"
 	errorsstatus "eventAI/internal/errorsStatus"
@@ -129,6 +131,31 @@ SET
     description = COALESCE($3, description),
     updated_at = NOW()
 WHERE id = $1
+`
+
+const eventLocationExistsSQL = `
+SELECT EXISTS(
+    SELECT 1
+    FROM event_locations
+    WHERE event_id = $1
+      AND lower(title) = lower($2)
+      AND COALESCE(lower(address), '') = COALESCE(lower($3), '')
+)
+`
+
+const selectEventVariantSQL = `
+UPDATE events
+SET
+    selected_variant_id = $2,
+    updated_at = NOW()
+WHERE id = $1
+  AND EXISTS (
+      SELECT 1
+      FROM event_variants
+      WHERE id = $2
+        AND event_id = $1
+        AND status = 'ready'
+  )
 `
 
 func NewEventRepository(db *pgxpool.Pool) repo.EventRepository {
@@ -270,7 +297,31 @@ func (r *EventRepository) SaveGeneratedVariant(ctx context.Context, eventID stri
 		return mapEventPgError(err)
 	}
 
+	insertedLocations := 0
+	seenLocations := make(map[string]struct{}, len(variant.Locations))
 	for _, location := range variant.Locations {
+		locationKey := buildLocationDedupKey(location.Title, location.Address)
+		if _, exists := seenLocations[locationKey]; exists {
+			continue
+		}
+		seenLocations[locationKey] = struct{}{}
+
+		var addressValue *string
+		if location.Address != nil {
+			trimmed := strings.TrimSpace(*location.Address)
+			if trimmed != "" {
+				addressValue = &trimmed
+			}
+		}
+
+		var alreadyExists bool
+		if err := tx.QueryRow(ctx, eventLocationExistsSQL, id, location.Title, addressValue).Scan(&alreadyExists); err != nil {
+			return err
+		}
+		if alreadyExists {
+			continue
+		}
+
 		var aiScore pgtype.Numeric
 		if location.AIScore != nil {
 			aiScore, err = parseNumeric(*location.AIScore)
@@ -285,7 +336,7 @@ func (r *EventRepository) SaveGeneratedVariant(ctx context.Context, eventID stri
 			id,
 			variantID,
 			location.Title,
-			location.Address,
+			addressValue,
 			location.Contacts,
 			location.AIComment,
 			aiScore,
@@ -294,6 +345,12 @@ func (r *EventRepository) SaveGeneratedVariant(ctx context.Context, eventID stri
 		); err != nil {
 			return mapEventPgError(err)
 		}
+
+		insertedLocations++
+	}
+
+	if insertedLocations == 0 {
+		return fmt.Errorf("no unique locations generated")
 	}
 
 	if _, err := tx.Exec(ctx, completeEventGenerationSQL, id, variant.Title, variant.Description); err != nil {
@@ -322,6 +379,28 @@ func (r *EventRepository) FailGeneration(ctx context.Context, eventID string, ge
 	}
 
 	return nil
+}
+
+func (r *EventRepository) SelectVariant(ctx context.Context, eventID string, variantID string) (core.Event, error) {
+	eventUUID, err := parseUUID(eventID)
+	if err != nil {
+		return core.Event{}, errorsstatus.ErrInvalidInput
+	}
+
+	variantUUID, err := parseUUID(variantID)
+	if err != nil {
+		return core.Event{}, errorsstatus.ErrInvalidInput
+	}
+
+	tag, err := r.db.Exec(ctx, selectEventVariantSQL, eventUUID, variantUUID)
+	if err != nil {
+		return core.Event{}, err
+	}
+	if tag.RowsAffected() == 0 {
+		return core.Event{}, errorsstatus.ErrNotFound
+	}
+
+	return r.GetByID(ctx, eventID)
 }
 
 func (r *EventRepository) ListMine(ctx context.Context, userID string) ([]core.Event, error) {
@@ -597,6 +676,15 @@ func mapEventPgError(err error) error {
 	}
 
 	return err
+}
+
+func buildLocationDedupKey(title string, address *string) string {
+	normalizedAddress := ""
+	if address != nil {
+		normalizedAddress = strings.ToLower(strings.TrimSpace(*address))
+	}
+
+	return strings.ToLower(strings.TrimSpace(title)) + "\n" + normalizedAddress
 }
 
 func (r *EventRepository) GetGuestAttendanceStatus(ctx context.Context, eventID string, userID string) (core.AttendanceStatus, error) {

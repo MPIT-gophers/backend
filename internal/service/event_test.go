@@ -218,6 +218,36 @@ func TestEventServiceGetInviteToken(t *testing.T) {
 	}
 }
 
+func TestEventServiceSelectVariant(t *testing.T) {
+	t.Parallel()
+
+	t.Run("OrganizerCanSelect", func(t *testing.T) {
+		repo := &stubEventRepository{
+			roleResult:          "organizer",
+			selectVariantResult: core.Event{ID: "event-1", SelectedVariantID: stringPtr("variant-1")},
+		}
+		s := NewEventService(repo, &stubEventGenerator{})
+
+		event, err := s.SelectVariant(context.Background(), "user-1", "event-1", "variant-1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if event.SelectedVariantID == nil || *event.SelectedVariantID != "variant-1" {
+			t.Fatalf("selected variant = %v, want variant-1", event.SelectedVariantID)
+		}
+	})
+
+	t.Run("OnlyOrganizerAllowed", func(t *testing.T) {
+		repo := &stubEventRepository{roleResult: "co_host"}
+		s := NewEventService(repo, &stubEventGenerator{})
+
+		_, err := s.SelectVariant(context.Background(), "user-1", "event-1", "variant-1")
+		if !errors.Is(err, errorsstatus.ErrForbidden) {
+			t.Fatalf("expected ErrForbidden, got %v", err)
+		}
+	})
+}
+
 func TestEventServiceListGuests(t *testing.T) {
 	t.Parallel()
 	repo := &stubEventRepository{
@@ -317,6 +347,11 @@ type stubEventRepository struct {
 	getErr         error
 	lastGetEventID string
 
+	selectVariantResult core.Event
+	selectVariantErr    error
+	lastSelectEventID   string
+	lastSelectVariantID string
+
 	roleResult      string
 	roleErr         error
 	lastRoleUserID  string
@@ -373,6 +408,12 @@ func (s *stubEventRepository) JoinByToken(_ context.Context, params repo.JoinEve
 func (s *stubEventRepository) GetByID(_ context.Context, eventID string) (core.Event, error) {
 	s.lastGetEventID = eventID
 	return s.getResult, s.getErr
+}
+
+func (s *stubEventRepository) SelectVariant(_ context.Context, eventID string, variantID string) (core.Event, error) {
+	s.lastSelectEventID = eventID
+	s.lastSelectVariantID = variantID
+	return s.selectVariantResult, s.selectVariantErr
 }
 
 func (s *stubEventRepository) GetAccessRole(_ context.Context, userID string, eventID string) (string, error) {

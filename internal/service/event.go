@@ -184,6 +184,32 @@ type UpdateGuestStatusInput struct {
 	AttendanceStatus *string
 }
 
+func (s *EventService) SelectVariant(ctx context.Context, actorID, eventID, variantID string) (core.Event, error) {
+	actorID = strings.TrimSpace(actorID)
+	eventID = strings.TrimSpace(eventID)
+	variantID = strings.TrimSpace(variantID)
+
+	if actorID == "" || eventID == "" || variantID == "" {
+		return core.Event{}, errorsstatus.ErrInvalidInput
+	}
+
+	role, err := s.repo.GetAccessRole(ctx, actorID, eventID)
+	if err != nil {
+		return core.Event{}, err
+	}
+	if role != "organizer" {
+		return core.Event{}, errorsstatus.ErrForbidden
+	}
+
+	event, err := s.repo.SelectVariant(ctx, eventID, variantID)
+	if err != nil {
+		return core.Event{}, err
+	}
+
+	event.AccessRole = &role
+	return event, nil
+}
+
 func (s *EventService) GetInviteToken(ctx context.Context, eventID string) (string, error) {
 	eventID = strings.TrimSpace(eventID)
 	if eventID == "" {

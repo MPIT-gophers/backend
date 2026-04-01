@@ -231,6 +231,40 @@ type UpdateGuestStatusRequest struct {
 	AttendanceStatus *string `json:"attendance_status"`
 }
 
+// SelectVariant godoc
+// @Summary Выбрать итоговый вариант события
+// @Description Устанавливает selected_variant_id для события.
+// @Description Выбор доступен только организатору события.
+// @Tags events
+// @Produce json
+// @Security BearerAuth
+// @Param eventID path string true "Идентификатор события"
+// @Param variantID path string true "Идентификатор варианта события"
+// @Success 200 {object} response.SuccessEnvelope{data=core.Event} "Вариант успешно выбран"
+// @Failure 400 {object} response.ErrorEnvelope "Некорректный eventID или variantID"
+// @Failure 401 {object} response.ErrorEnvelope "JWT отсутствует или невалиден"
+// @Failure 403 {object} response.ErrorEnvelope "Выбор варианта доступен только организатору"
+// @Failure 404 {object} response.ErrorEnvelope "Событие или вариант не найдены"
+// @Router /events/{eventID}/variants/{variantID}/select [post]
+func (h *EventHandler) SelectVariant(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		response.Failure(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	eventID := chi.URLParam(r, "eventID")
+	variantID := chi.URLParam(r, "variantID")
+
+	event, err := h.service.SelectVariant(r.Context(), userID, eventID, variantID)
+	if err != nil {
+		response.Failure(w, errorsstatus.HTTPStatus(err), eventErrorMessage(err))
+		return
+	}
+
+	response.Success(w, http.StatusOK, event)
+}
+
 // UpdateGuestStatus godoc
 // @Summary Обновить статус посещения гостя
 // @Description Обновляет attendance_status конкретного гостя в рамках события.
