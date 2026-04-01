@@ -117,19 +117,25 @@ INSERT INTO event_guests (
     invite_id,
     user_id,
     full_name,
-    phone
+    phone,
+    approval_status,
+    approved_at
 ) VALUES (
     sqlc.arg(event_id),
     sqlc.arg(invite_id),
     sqlc.arg(user_id),
     sqlc.arg(full_name),
-    sqlc.narg(phone)
+    sqlc.narg(phone),
+    'approved',
+    NOW()
 )
 ON CONFLICT (event_id, user_id) WHERE user_id IS NOT NULL
 DO UPDATE SET
     invite_id = EXCLUDED.invite_id,
     full_name = EXCLUDED.full_name,
     phone = EXCLUDED.phone,
+    approval_status = 'approved',
+    approved_at = NOW(),
     updated_at = NOW();
 
 -- name: IncrementInviteUsage :exec
@@ -246,26 +252,6 @@ FROM event_guests
 WHERE event_id = sqlc.arg(event_id)
   AND (sqlc.narg(approval_status)::text IS NULL OR approval_status = sqlc.narg(approval_status)::text)
 ORDER BY created_at ASC;
-
--- name: UpdateGuestApprovalStatus :one
-UPDATE event_guests
-SET
-    approval_status     = sqlc.arg(approval_status),
-    approved_by_user_id = sqlc.arg(approved_by_user_id),
-    approved_at         = NOW(),
-    updated_at          = NOW()
-WHERE id = sqlc.arg(id)
-  AND event_id = sqlc.arg(event_id)
-RETURNING
-    id,
-    event_id,
-    user_id,
-    full_name,
-    phone,
-    approval_status,
-    attendance_status,
-    plus_one_count,
-    created_at;
 
 -- name: UpdateGuestAttendanceStatus :one
 UPDATE event_guests

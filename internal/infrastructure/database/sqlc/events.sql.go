@@ -661,68 +661,6 @@ func (q *Queries) ListMyEvents(ctx context.Context, userID pgtype.UUID) ([]ListM
 	return items, nil
 }
 
-const updateGuestApprovalStatus = `-- name: UpdateGuestApprovalStatus :one
-UPDATE event_guests
-SET
-    approval_status     = $1,
-    approved_by_user_id = $2,
-    approved_at         = NOW(),
-    updated_at          = NOW()
-WHERE id = $3
-  AND event_id = $4
-RETURNING
-    id,
-    event_id,
-    user_id,
-    full_name,
-    phone,
-    approval_status,
-    attendance_status,
-    plus_one_count,
-    created_at
-`
-
-type UpdateGuestApprovalStatusParams struct {
-	ApprovalStatus   string      `json:"approval_status"`
-	ApprovedByUserID pgtype.UUID `json:"approved_by_user_id"`
-	ID               pgtype.UUID `json:"id"`
-	EventID          pgtype.UUID `json:"event_id"`
-}
-
-type UpdateGuestApprovalStatusRow struct {
-	ID               pgtype.UUID        `json:"id"`
-	EventID          pgtype.UUID        `json:"event_id"`
-	UserID           pgtype.UUID        `json:"user_id"`
-	FullName         string             `json:"full_name"`
-	Phone            *string            `json:"phone"`
-	ApprovalStatus   string             `json:"approval_status"`
-	AttendanceStatus string             `json:"attendance_status"`
-	PlusOneCount     int32              `json:"plus_one_count"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-}
-
-func (q *Queries) UpdateGuestApprovalStatus(ctx context.Context, arg UpdateGuestApprovalStatusParams) (UpdateGuestApprovalStatusRow, error) {
-	row := q.db.QueryRow(ctx, updateGuestApprovalStatus,
-		arg.ApprovalStatus,
-		arg.ApprovedByUserID,
-		arg.ID,
-		arg.EventID,
-	)
-	var i UpdateGuestApprovalStatusRow
-	err := row.Scan(
-		&i.ID,
-		&i.EventID,
-		&i.UserID,
-		&i.FullName,
-		&i.Phone,
-		&i.ApprovalStatus,
-		&i.AttendanceStatus,
-		&i.PlusOneCount,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const updateGuestAttendanceStatus = `-- name: UpdateGuestAttendanceStatus :one
 UPDATE event_guests
 SET
@@ -785,19 +723,25 @@ INSERT INTO event_guests (
     invite_id,
     user_id,
     full_name,
-    phone
+    phone,
+    approval_status,
+    approved_at
 ) VALUES (
     $1,
     $2,
     $3,
     $4,
-    $5
+    $5,
+    'approved',
+    NOW()
 )
 ON CONFLICT (event_id, user_id) WHERE user_id IS NOT NULL
 DO UPDATE SET
     invite_id = EXCLUDED.invite_id,
     full_name = EXCLUDED.full_name,
     phone = EXCLUDED.phone,
+    approval_status = 'approved',
+    approved_at = NOW(),
     updated_at = NOW()
 `
 

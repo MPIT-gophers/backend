@@ -135,14 +135,12 @@ type stubEventRepository struct {
 
 	inviteTokenResult      string
 	inviteTokenErr         error
-	listGuestsResult      []core.EventGuest
-	listGuestsErr         error
-	updateApprovalResult      core.EventGuest
-	updateApprovalErr         error
-	updateAttendanceResult     core.EventGuest
-	updateAttendanceErr        error
-	guestStatsResult      core.EventGuestStats
-	guestStatsErr         error
+	listGuestsResult       []core.EventGuest
+	listGuestsErr          error
+	updateAttendanceResult core.EventGuest
+	updateAttendanceErr    error
+	guestStatsResult       core.EventGuestStats
+	guestStatsErr          error
 }
 
 func (s *stubEventRepository) Create(_ context.Context, _ repo.CreateEventParams) (core.Event, error) {
@@ -173,10 +171,6 @@ func (s *stubEventRepository) ListGuests(_ context.Context, _ string, _ *string)
 	return s.listGuestsResult, s.listGuestsErr
 }
 
-func (s *stubEventRepository) UpdateGuestApprovalStatus(_ context.Context, _ repo.UpdateGuestApprovalParams) (core.EventGuest, error) {
-	return s.updateApprovalResult, s.updateApprovalErr
-}
-
 func (s *stubEventRepository) UpdateGuestAttendanceStatus(_ context.Context, _ repo.UpdateGuestAttendanceParams) (core.EventGuest, error) {
 	return s.updateAttendanceResult, s.updateAttendanceErr
 }
@@ -193,7 +187,7 @@ func TestEventHandlerGetInviteSuccess(t *testing.T) {
 	t.Parallel()
 
 	handler := NewEventHandler(service.NewEventService(&stubEventRepository{
-		roleResult: "organizer",
+		roleResult:        "organizer",
 		inviteTokenResult: "invite-123",
 	}))
 
@@ -242,15 +236,15 @@ func TestEventHandlerUpdateGuestStatusSuccess(t *testing.T) {
 	t.Parallel()
 
 	handler := NewEventHandler(service.NewEventService(&stubEventRepository{
-		roleResult: "organizer",
-		updateApprovalResult: core.EventGuest{ID: "guest-1", ApprovalStatus: "approved"},
+		roleResult:             "guest_approved",
+		updateAttendanceResult: core.EventGuest{ID: "guest-1", ApprovalStatus: "approved", AttendanceStatus: "confirmed"},
 	}))
 
 	wrapped := middleware.Auth(func(token string) (string, error) {
 		return "user-1", nil
 	})(http.HandlerFunc(handler.UpdateGuestStatus))
 
-	body := bytes.NewBufferString(`{"approval_status":"approved"}`)
+	body := bytes.NewBufferString(`{"attendance_status":"confirmed"}`)
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/events/event-1/guests/guest-1/status", body)
 	req.Header.Set("Authorization", "Bearer good-token")
 	rctx := chi.NewRouteContext()

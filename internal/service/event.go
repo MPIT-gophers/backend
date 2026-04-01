@@ -109,7 +109,6 @@ func (s *EventService) GetByID(ctx context.Context, eventID string) (core.Event,
 }
 
 type UpdateGuestStatusInput struct {
-	ApprovalStatus   *string
 	AttendanceStatus *string
 }
 
@@ -150,32 +149,13 @@ func (s *EventService) UpdateGuestStatus(ctx context.Context, actorID, eventID, 
 		return core.EventGuest{}, errorsstatus.ErrInvalidInput
 	}
 
-	if input.ApprovalStatus != nil && input.AttendanceStatus != nil {
-		return core.EventGuest{}, errorsstatus.ErrInvalidInput
-	}
-	if input.ApprovalStatus == nil && input.AttendanceStatus == nil {
+	if input.AttendanceStatus == nil {
 		return core.EventGuest{}, errorsstatus.ErrInvalidInput
 	}
 
 	role, err := s.repo.GetAccessRole(ctx, actorID, eventID)
 	if err != nil {
 		return core.EventGuest{}, err
-	}
-
-	if input.ApprovalStatus != nil {
-		if role != "organizer" && role != "co_host" {
-			return core.EventGuest{}, errorsstatus.ErrForbidden
-		}
-		status := core.ApprovalStatus(strings.TrimSpace(*input.ApprovalStatus))
-		if status != core.ApprovalApproved && status != core.ApprovalRejected {
-			return core.EventGuest{}, errorsstatus.ErrInvalidInput
-		}
-		return s.repo.UpdateGuestApprovalStatus(ctx, repo.UpdateGuestApprovalParams{
-			GuestID:          guestID,
-			EventID:          eventID,
-			ApprovalStatus:   status,
-			ApprovedByUserID: actorID,
-		})
 	}
 
 	// attendance_status — только гость
