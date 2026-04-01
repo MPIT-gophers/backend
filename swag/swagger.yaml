@@ -59,8 +59,6 @@ definitions:
     type: object
   action.UpdateGuestStatusRequest:
     properties:
-      approval_status:
-        type: string
       attendance_status:
         type: string
     type: object
@@ -284,6 +282,7 @@ definitions:
     properties:
       data: {}
     type: object
+host: mpit-bot.kostya1024.ru
 info:
   contact: {}
   description: Backend API for mpit2026-reg.
@@ -883,7 +882,7 @@ paths:
         name: guestID
         required: true
         type: string
-      - description: Status update
+      - description: Attendance update
         in: body
         name: request
         required: true
@@ -1134,6 +1133,8 @@ paths:
       summary: Update current user profile
       tags:
       - auth
+schemes:
+- https
 securityDefinitions:
   BearerAuth:
     in: header

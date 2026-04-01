@@ -39,5 +39,4 @@ jobs:
             git checkout -B "${GITHUB_REF_NAME}" "origin/${GITHUB_REF_NAME}"
             git reset --hard "${GITHUB_SHA}"
 
-            docker compose up -d --build app
-            docker compose ps app
+            docker-compose up -d --build app

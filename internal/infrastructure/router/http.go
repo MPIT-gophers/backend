@@ -7,12 +7,12 @@ import (
 	"eventAI/internal/adapters/api/action"
 	apimiddleware "eventAI/internal/adapters/api/middleware"
 	"eventAI/internal/config"
+	"eventAI/internal/infrastructure/ai"
 	"eventAI/internal/infrastructure/authz"
 	"eventAI/internal/infrastructure/database"
 	"eventAI/internal/infrastructure/file"
 	"eventAI/internal/infrastructure/jwt"
 	"eventAI/internal/infrastructure/max"
-	"eventAI/internal/infrastructure/ai"
 	"eventAI/internal/repo"
 	"eventAI/internal/service"
 
@@ -23,13 +23,14 @@ import (
 
 func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler, error) {
 	healthHandler := action.NewHealthHandler(db)
+	docsHandler := action.NewDocsHandler()
 
 	eventRepo := database.NewEventRepository(db)
 	eventService := service.NewEventService(eventRepo)
 	eventHandler := action.NewEventHandler(eventService)
 
 	authRepo := database.NewAuthRepository(db)
-	
+
 	wishlistRepo := repo.NewWishlistRepository(db)
 	mockAIParser := ai.NewMockWishlistParser()
 	wishlistService := service.NewWishlistService(wishlistRepo, mockAIParser, eventRepo)
@@ -74,13 +75,18 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 	r.Use(apimiddleware.Logger(logger))
 	r.Use(apimiddleware.Recoverer(logger))
 
+	docsFS := http.FileServer(http.Dir("./swag"))
+	r.Get("/api/docs", docsHandler.Redirect)
+	r.Get("/api/docs/", docsHandler.Index)
+	r.Handle("/api/docs/*", http.StripPrefix("/api/docs/", docsFS))
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/healthz", healthHandler.Get)
-		
+
 		// Serve static uploaded files
 		fs := http.FileServer(http.Dir("./uploads"))
 		r.Handle("/uploads/*", http.StripPrefix("/uploads/", fs))
-		
+
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/max/start", authHandler.StartMAXAuth)
 			r.Post("/max/login", authHandler.LoginWithMAX)
@@ -104,7 +110,7 @@ func New(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) (http.Handler
 				r.Get("/guests", eventHandler.ListGuests)
 				r.Get("/stats", eventHandler.GetGuestStats)
 				r.Patch("/guests/{guestID}/status", eventHandler.UpdateGuestStatus)
-				
+
 				// Wishlist
 				r.Get("/wishlist", wishlistHandler.GetWishlist)
 				r.Post("/wishlist/parse", wishlistHandler.ParseWishlist)

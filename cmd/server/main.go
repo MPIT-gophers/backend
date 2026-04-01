@@ -19,6 +19,8 @@ import (
 // @title mpit2026-reg API
 // @version 0.1.0
 // @description Backend API for mpit2026-reg.
+// @host mpit-bot.kostya1024.ru
+// @schemes https
 // @BasePath /api/v1
 // @securityDefinitions.apikey BearerAuth
 // @in header

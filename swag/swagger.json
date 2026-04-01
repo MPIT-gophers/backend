@@ -1,4 +1,7 @@
 {
+    "schemes": [
+        "https"
+    ],
     "swagger": "2.0",
     "info": {
         "description": "Backend API for mpit2026-reg.",
@@ -6,6 +9,7 @@
         "contact": {},
         "version": "0.1.0"
     },
+    "host": "mpit-bot.kostya1024.ru",
     "basePath": "/api/v1",
     "paths": {
         "/api/v1/events/{eventID}/photos": {
@@ -1067,7 +1071,7 @@
                         "required": true
                     },
                     {
-                        "description": "Status update",
+                        "description": "Attendance update",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -1465,9 +1469,6 @@
         "action.UpdateGuestStatusRequest": {
             "type": "object",
             "properties": {
-                "approval_status": {
-                    "type": "string"
-                },
                 "attendance_status": {
                     "type": "string"
                 }
