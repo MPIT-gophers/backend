@@ -45,18 +45,24 @@ type EventVariant struct {
 }
 
 type EventLocation struct {
-	ID         string     `json:"id"`
-	EventID    string     `json:"event_id"`
-	VariantID  string     `json:"variant_id"`
-	Title      string     `json:"title"`
-	Address    *string    `json:"address,omitempty"`
-	Contacts   *string    `json:"contacts,omitempty"`
-	AIComment  *string    `json:"ai_comment,omitempty"`
-	AIScore    *string    `json:"ai_score,omitempty"`
-	SortOrder  int        `json:"sort_order"`
-	Source     string     `json:"source"`
-	IsRejected bool       `json:"is_rejected"`
-	RejectedAt *time.Time `json:"rejected_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
+	ID           string     `json:"id"`
+	EventID      string     `json:"event_id"`
+	VariantID    string     `json:"variant_id"`
+	Title        string     `json:"title"`
+	ImageURL     *string    `json:"image_url,omitempty"`
+	Description  *string    `json:"description,omitempty"`
+	Rating       *string    `json:"rating,omitempty"`
+	Address      *string    `json:"address,omitempty"`
+	WorkingHours *string    `json:"working_hours,omitempty"`
+	AvgBill      *string    `json:"avg_bill,omitempty"`
+	Cuisine      *string    `json:"cuisine,omitempty"`
+	Contacts     *string    `json:"contacts,omitempty"`
+	AIComment    *string    `json:"ai_comment,omitempty"`
+	AIScore      *string    `json:"ai_score,omitempty"`
+	SortOrder    int        `json:"sort_order"`
+	Source       string     `json:"source"`
+	IsRejected   bool       `json:"is_rejected"`
+	RejectedAt   *time.Time `json:"rejected_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }

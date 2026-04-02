@@ -189,26 +189,37 @@ func mapSQLCVariant(variant dbsqlc.EventVariant) core.EventVariant {
 }
 
 func mapSQLCLocation(location dbsqlc.EventLocation) (core.EventLocation, error) {
+	rating, err := nullableNumericToString(location.Rating)
+	if err != nil {
+		return core.EventLocation{}, err
+	}
+
 	aiScore, err := nullableNumericToString(location.AiScore)
 	if err != nil {
 		return core.EventLocation{}, err
 	}
 
 	return core.EventLocation{
-		ID:         location.ID.String(),
-		EventID:    location.EventID.String(),
-		VariantID:  location.VariantID.String(),
-		Title:      location.Title,
-		Address:    location.Address,
-		Contacts:   location.Contacts,
-		AIComment:  location.AiComment,
-		AIScore:    aiScore,
-		SortOrder:  int(location.SortOrder),
-		Source:     location.Source,
-		IsRejected: location.IsRejected,
-		RejectedAt: timestamptzPtr(location.RejectedAt),
-		CreatedAt:  timestamptzToTime(location.CreatedAt),
-		UpdatedAt:  timestamptzToTime(location.UpdatedAt),
+		ID:           location.ID.String(),
+		EventID:      location.EventID.String(),
+		VariantID:    location.VariantID.String(),
+		Title:        location.Title,
+		ImageURL:     location.ImageUrl,
+		Description:  location.Description,
+		Rating:       rating,
+		Address:      location.Address,
+		WorkingHours: location.WorkingHours,
+		AvgBill:      location.AvgBill,
+		Cuisine:      location.Cuisine,
+		Contacts:     location.Contacts,
+		AIComment:    location.AiComment,
+		AIScore:      aiScore,
+		SortOrder:    int(location.SortOrder),
+		Source:       location.Source,
+		IsRejected:   location.IsRejected,
+		RejectedAt:   timestamptzPtr(location.RejectedAt),
+		CreatedAt:    timestamptzToTime(location.CreatedAt),
+		UpdatedAt:    timestamptzToTime(location.UpdatedAt),
 	}, nil
 }
 

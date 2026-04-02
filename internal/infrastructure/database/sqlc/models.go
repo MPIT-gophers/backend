@@ -66,15 +66,21 @@ type EventInvite struct {
 
 // Карточки локаций внутри конкретного сгенерированного варианта
 type EventLocation struct {
-	ID        pgtype.UUID    `json:"id"`
-	EventID   pgtype.UUID    `json:"event_id"`
-	VariantID pgtype.UUID    `json:"variant_id"`
-	Title     string         `json:"title"`
-	Address   *string        `json:"address"`
-	Contacts  *string        `json:"contacts"`
-	AiComment *string        `json:"ai_comment"`
-	AiScore   pgtype.Numeric `json:"ai_score"`
-	SortOrder int32          `json:"sort_order"`
+	ID           pgtype.UUID    `json:"id"`
+	EventID      pgtype.UUID    `json:"event_id"`
+	VariantID    pgtype.UUID    `json:"variant_id"`
+	Title        string         `json:"title"`
+	ImageUrl     *string        `json:"image_url"`
+	Description  *string        `json:"description"`
+	Rating       pgtype.Numeric `json:"rating"`
+	Address      *string        `json:"address"`
+	WorkingHours *string        `json:"working_hours"`
+	AvgBill      *string        `json:"avg_bill"`
+	Cuisine      *string        `json:"cuisine"`
+	Contacts     *string        `json:"contacts"`
+	AiComment    *string        `json:"ai_comment"`
+	AiScore      pgtype.Numeric `json:"ai_score"`
+	SortOrder    int32          `json:"sort_order"`
 	// initial = первая генерация, regenerated = замена после перегенерации
 	Source     string             `json:"source"`
 	IsRejected bool               `json:"is_rejected"`

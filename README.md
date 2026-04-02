@@ -52,6 +52,13 @@ docker compose up postgres -d
 make run
 ```
 
+Для локального запуска с хоста в `.env` нужно указывать адрес БД, доступный с вашей машины:
+
+- `POSTGRES_HOST=localhost`
+- `POSTGRES_PORT=<порт, проброшенный docker compose>`
+
+Имя `postgres` резолвится только внутри сети `docker compose`, поэтому для `go run` / `make run` оно не подходит.
+
 HTTP API поднимется на `http://localhost:8080`.
 
 Полный старт в Docker:
@@ -60,6 +67,8 @@ HTTP API поднимется на `http://localhost:8080`.
 cp .env.example .env
 docker compose up --build
 ```
+
+Для контейнера `app` compose сам подставляет подключение к БД как `postgres:5432`, независимо от локального значения в `.env`.
 
 ## Основные команды
 

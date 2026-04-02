@@ -63,8 +63,8 @@ func TestEventServiceCreateNormalizesInput(t *testing.T) {
 		t.Fatalf("budget = %q, want 15000.50", repository.lastCreateParams.Budget)
 	}
 
-	if generator.lastRequest.Event != "корпоратив" {
-		t.Fatalf("event = %q, want корпоратив", generator.lastRequest.Event)
+	if generator.lastRequest.Event != "мероприятие" {
+		t.Fatalf("event = %q, want мероприятие", generator.lastRequest.Event)
 	}
 
 	if generator.lastRequest.Time != "19:30" {
@@ -111,6 +111,39 @@ func TestEventServiceCreateRejectsPastDate(t *testing.T) {
 	})
 	if !errors.Is(err, errorsstatus.ErrInvalidInput) {
 		t.Fatalf("error = %v, want invalid input", err)
+	}
+}
+
+func TestEventServiceCreateInfersPointSearchEventType(t *testing.T) {
+	t.Parallel()
+
+	repository := &stubEventRepository{
+		createResult: core.Event{ID: "event-1", Status: core.EventStatusGenerating},
+	}
+	generator := &stubEventGenerator{
+		pointSearchResult: n8n.PointSearchResponse{
+			Total: 1,
+			Venues: []n8n.PointSearchVenue{
+				{Name: stringPtr("Дом Каюра"), Address: stringPtr("Якутск, Лесная улица, 1")},
+			},
+		},
+	}
+	service := NewEventService(repository, generator)
+
+	_, err := service.Create(context.Background(), "user-1", CreateEventInput{
+		City:   "Якутск",
+		Date:   "2099-06-01",
+		Time:   "19:30",
+		Scale:  12,
+		Energy: "день рождения, хочу снять домик с мангалом и зоной отдыха",
+		Budget: "50000",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if generator.lastRequest.Event != "день рождения" {
+		t.Fatalf("event = %q, want день рождения", generator.lastRequest.Event)
 	}
 }
 

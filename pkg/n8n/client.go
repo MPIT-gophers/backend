@@ -35,13 +35,20 @@ type PointSearchRequest struct {
 }
 
 type PointSearchVenue struct {
-	ID             *string `json:"id"`
-	Name           *string `json:"name"`
-	Address        *string `json:"address"`
-	AddressName    *string `json:"address_name"`
-	AddressComment *string `json:"address_comment"`
-	PurposeName    *string `json:"purpose_name"`
-	Type           *string `json:"type"`
+	ID             *string  `json:"id"`
+	Name           *string  `json:"name"`
+	ImageURL       *string  `json:"image_url"`
+	Description    *string  `json:"description"`
+	Rating         *float64 `json:"rating"`
+	Address        *string  `json:"address"`
+	AddressName    *string  `json:"address_name"`
+	AddressComment *string  `json:"address_comment"`
+	WorkingHours   *string  `json:"working_hours"`
+	AvgBill        *string  `json:"avg_bill"`
+	Cuisine        *string  `json:"cuisine"`
+	Contacts       *string  `json:"contacts"`
+	PurposeName    *string  `json:"purpose_name"`
+	Type           *string  `json:"type"`
 }
 
 type PointSearchResponse struct {

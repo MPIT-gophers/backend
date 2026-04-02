@@ -102,7 +102,13 @@ INSERT INTO event_locations (
     event_id,
     variant_id,
     title,
+    image_url,
+    description,
+    rating,
     address,
+    working_hours,
+    avg_bill,
+    cuisine,
     contacts,
     ai_comment,
     ai_score,
@@ -117,7 +123,13 @@ INSERT INTO event_locations (
     $6,
     $7,
     $8,
-    $9
+    $9,
+    $10,
+    $11,
+    $12,
+    $13,
+    $14,
+    $15
 )
 `
 
@@ -330,13 +342,27 @@ func (r *EventRepository) SaveGeneratedVariant(ctx context.Context, eventID stri
 			}
 		}
 
+		var rating pgtype.Numeric
+		if location.Rating != nil {
+			rating, err = parseNumeric(*location.Rating)
+			if err != nil {
+				return errorsstatus.ErrInvalidInput
+			}
+		}
+
 		if _, err := tx.Exec(
 			ctx,
 			insertEventLocationSQL,
 			id,
 			variantID,
 			location.Title,
+			location.ImageURL,
+			location.Description,
+			rating,
 			addressValue,
+			location.WorkingHours,
+			location.AvgBill,
+			location.Cuisine,
 			location.Contacts,
 			location.AIComment,
 			aiScore,

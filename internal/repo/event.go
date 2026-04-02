@@ -33,13 +33,19 @@ type GeneratedEventVariant struct {
 }
 
 type GeneratedEventLocation struct {
-	Title     string
-	Address   *string
-	Contacts  *string
-	AIComment *string
-	AIScore   *string
-	SortOrder int
-	Source    string
+	Title        string
+	ImageURL     *string
+	Description  *string
+	Rating       *string
+	Address      *string
+	WorkingHours *string
+	AvgBill      *string
+	Cuisine      *string
+	Contacts     *string
+	AIComment    *string
+	AIScore      *string
+	SortOrder    int
+	Source       string
 }
 
 type EventRepository interface {

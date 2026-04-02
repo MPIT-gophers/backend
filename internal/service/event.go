@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultPointSearchEventType = "корпоратив"
+	defaultPointSearchEventType = "мероприятие"
 	defaultBudgetType           = "total"
 	defaultBudgetCurrency       = "RUB"
 	defaultVariantSource        = "initial"
@@ -115,7 +115,7 @@ func (s *EventService) Create(ctx context.Context, userID string, input CreateEv
 	}
 
 	pointSearchResponse, err := s.generator.PointSearch(ctx, n8n.PointSearchRequest{
-		Event: defaultPointSearchEventType,
+		Event: inferPointSearchEventType(energy),
 		City:  city,
 		Date:  eventDate.Format("2006-01-02"),
 		Time:  pointSearchTime,
@@ -307,33 +307,84 @@ func normalizeBudget(value string) (string, error) {
 	return fmt.Sprintf("%.2f", parsed), nil
 }
 
+func inferPointSearchEventType(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return defaultPointSearchEventType
+	}
+
+	switch {
+	case containsAny(normalized, "день рождения", "деньрождения", "др", "юбилей"):
+		return "день рождения"
+	case containsAny(normalized, "свадьба", "венчание"):
+		return "свадьба"
+	case containsAny(normalized, "девичник"):
+		return "девичник"
+	case containsAny(normalized, "мальчишник"):
+		return "мальчишник"
+	case containsAny(normalized, "выпускной"):
+		return "выпускной"
+	case containsAny(normalized, "корпоратив", "тимбилдинг", "тим билдинг", "team building", "команд"):
+		return "корпоратив"
+	case containsAny(normalized, "конференц", "форум", "митап", "семинар", "презентац"):
+		return "деловое мероприятие"
+	case containsAny(normalized, "свидание", "романтик"):
+		return "свидание"
+	default:
+		return defaultPointSearchEventType
+	}
+}
+
 func buildGeneratedVariant(city, energy string, scale int, timeValue string, response n8n.PointSearchResponse) repo.GeneratedEventVariant {
 	title := fmt.Sprintf("Подборка площадок в %s", city)
-	description := fmt.Sprintf(
-		"Найдено %d мест для компании %d чел. с фокусом на \"%s\" к %s.",
-		len(response.Venues),
-		scale,
-		energy,
-		timeValue,
-	)
 
 	locations := make([]repo.GeneratedEventLocation, 0, len(response.Venues))
 	for i, venue := range response.Venues {
-		locations = append(locations, repo.GeneratedEventLocation{
-			Title:     firstNonEmpty(derefString(venue.Name), derefString(venue.AddressName), derefString(venue.Address), fmt.Sprintf("Локация %d", i+1)),
-			Address:   firstNonNilString(venue.Address, venue.AddressName),
-			Contacts:  nil,
-			AIComment: nullableString(joinNonEmpty([]string{derefString(venue.PurposeName), derefString(venue.AddressComment), derefString(venue.Type)}, " • ")),
-			AIScore:   nil,
-			SortOrder: i + 1,
-			Source:    defaultVariantSource,
-		})
+		location := buildGeneratedLocation(city, i, venue)
+		if location == nil {
+			continue
+		}
+		locations = append(locations, *location)
 	}
+
+	focusLabel := normalizeEventFocus(energy)
+	description := fmt.Sprintf(
+		"Найдено %d мест для компании %d чел. с фокусом на \"%s\" к %s.",
+		len(locations),
+		scale,
+		focusLabel,
+		timeValue,
+	)
 
 	return repo.GeneratedEventVariant{
 		Title:       &title,
 		Description: &description,
 		Locations:   locations,
+	}
+}
+
+func buildGeneratedLocation(city string, index int, venue n8n.PointSearchVenue) *repo.GeneratedEventLocation {
+	title := firstNonEmpty(derefString(venue.Name), derefString(venue.AddressName), derefString(venue.Address), fmt.Sprintf("Локация %d", index+1))
+	address := firstNonNilString(venue.Address, venue.AddressName)
+
+	if isBogusVenue(city, title, address) {
+		return nil
+	}
+
+	return &repo.GeneratedEventLocation{
+		Title:        title,
+		ImageURL:     venue.ImageURL,
+		Description:  buildVenueDescription(venue),
+		Rating:       nullableFloatString(venue.Rating),
+		Address:      address,
+		WorkingHours: venue.WorkingHours,
+		AvgBill:      venue.AvgBill,
+		Cuisine:      venue.Cuisine,
+		Contacts:     venue.Contacts,
+		AIComment:    nullableString(joinNonEmpty([]string{derefString(venue.PurposeName), derefString(venue.AddressComment), derefString(venue.Type)}, " • ")),
+		AIScore:      nil,
+		SortOrder:    index + 1,
+		Source:       defaultVariantSource,
 	}
 }
 
@@ -397,6 +448,56 @@ func nullableString(value string) *string {
 	}
 
 	return &value
+}
+
+func containsAny(value string, substrings ...string) bool {
+	for _, substring := range substrings {
+		if strings.Contains(value, substring) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func buildVenueDescription(venue n8n.PointSearchVenue) *string {
+	return nullableString(firstNonEmpty(
+		derefString(venue.Description),
+		joinNonEmpty([]string{derefString(venue.PurposeName), derefString(venue.AddressComment), derefString(venue.Type)}, " • "),
+	))
+}
+
+func nullableFloatString(value *float64) *string {
+	if value == nil {
+		return nil
+	}
+
+	formatted := fmt.Sprintf("%.2f", *value)
+	return &formatted
+}
+
+func normalizeEventFocus(value string) string {
+	normalized := strings.TrimSpace(value)
+	if normalized == "" || normalized == "0" {
+		return "без уточнённого фокуса"
+	}
+
+	return normalized
+}
+
+func isBogusVenue(city string, title string, address *string) bool {
+	title = strings.TrimSpace(strings.ToLower(title))
+	city = strings.TrimSpace(strings.ToLower(city))
+	if title == "" {
+		return true
+	}
+
+	if address == nil {
+		return title == city
+	}
+
+	normalizedAddress := strings.TrimSpace(strings.ToLower(*address))
+	return title == city && normalizedAddress == city
 }
 
 func GenerateInviteToken() (string, error) {

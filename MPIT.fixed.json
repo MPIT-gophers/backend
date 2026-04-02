@@ -1,0 +1,164 @@
+{
+  "name": "My workflow copy",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "point-search",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "9cf75d59-a657-405a-b914-76f8dbaa95e1",
+      "name": "Webhook",
+      "webhookId": "6fc930f3-876f-436e-9c1e-2028bf550224"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $json.body ?? $json;\n\nif (!body.event) throw new Error('event is required');\nif (!body.city) throw new Error('city is required');\nif (!body.date) throw new Error('date is required');\nif (!body.time) throw new Error('time is required');\nif (body.participants === undefined || body.participants === null) {\n  throw new Error('participants is required');\n}\n\nconst preferences = Array.isArray(body.preferences)\n  ? body.preferences.map((value) => String(value).trim()).filter(Boolean)\n  : [];\n\nconst budget = body.budget && typeof body.budget === 'object'\n  ? {\n      type: body.budget.type === 'per_person' ? 'per_person' : 'total',\n      amount: Number(body.budget.amount ?? 0),\n      currency: body.budget.currency || 'RUB'\n    }\n  : {\n      type: 'total',\n      amount: 0,\n      currency: 'RUB'\n    };\n\nreturn {\n  json: {\n    event: String(body.event).trim(),\n    city: String(body.city).trim(),\n    date: String(body.date).trim(),\n    time: String(body.time).trim(),\n    budget,\n    participants: Number(body.participants),\n    preferences\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "cd9c4bc3-cc7e-4137-8e46-7cb964273a86",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nconst prefs = Array.isArray(data.preferences) ? data.preferences : [];\nconst sourceText = [data.event, ...prefs].join(' ').toLowerCase();\n\nconst unique = (values) => [...new Set(values.filter(Boolean))];\nconst has = (re) => re.test(sourceText);\n\nconst housingTerms = [];\nconst occasionTerms = [];\nconst featureTerms = [];\n\nif (has(/дом|домик|коттедж|шале|вилл|гостев(ой)?\\s*дом/iu)) {\n  housingTerms.push('коттедж', 'гостевой дом', 'дом отдыха');\n}\nif (has(/база|турбаза|база\\s*отдыха|глэмпинг/iu)) {\n  housingTerms.push('база отдыха', 'турбаза', 'глэмпинг');\n}\nif (has(/день\\s*рождения|юбилей|праздник/iu)) {\n  occasionTerms.push('день рождения');\n}\nif (has(/мангал|барбекю|шашлык/iu)) {\n  featureTerms.push('мангал', 'барбекю', 'беседка');\n}\nif (has(/баня|сауна/iu)) {\n  featureTerms.push('баня', 'сауна');\n}\n\nif (housingTerms.length === 0 && has(/корпоратив|команда|тимбилдинг/iu)) {\n  housingTerms.push('база отдыха');\n}\nif (housingTerms.length === 0 && occasionTerms.length > 0) {\n  housingTerms.push('коттедж', 'база отдыха');\n}\nif (occasionTerms.length === 0 && !has(/свадьба|корпоратив|конференц/iu)) {\n  occasionTerms.push(data.event);\n}\n\nconst budgetType = data.budget?.type || 'total';\nconst budgetAmount = Number(data.budget?.amount || 0);\nconst participants = Math.max(Number(data.participants || 1), 1);\nconst budgetPerPerson = budgetType === 'per_person' ? budgetAmount : Math.floor(budgetAmount / participants);\n\nconst queryTerms = unique([\n  ...housingTerms,\n  ...occasionTerms,\n  ...featureTerms,\n  ...prefs.slice(0, 2)\n]);\n\nconst query2gis = [data.city, ...queryTerms].join(' ').replace(/\\s+/g, ' ').trim();\n\nreturn [\n  {\n    json: {\n      ...data,\n      budget_per_person: budgetPerPerson,\n      housing_terms: unique(housingTerms),\n      occasion_terms: unique(occasionTerms),\n      feature_terms: unique(featureTerms),\n      query_2gis: query2gis || data.city,\n      city_normalized: String(data.city || '').trim().toLowerCase()\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "4d780e32-e896-47e5-9d3f-a06727a33a1e",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "url": "https://catalog.api.2gis.com/3.0/items",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.query_2gis }}"
+            },
+            {
+              "name": "type",
+              "value": "branch"
+            },
+            {
+              "name": "fields",
+              "value": "items.full_name,items.address_name,items.address_comment,items.purpose_name,items.type,items.rubrics,items.schedule,items.description,items.reviews,items.attribute_groups,items.contact_groups,items.external_content,items.flags"
+            },
+            {
+              "name": "locale",
+              "value": "ru_RU"
+            },
+            {
+              "name": "page_size",
+              "value": "20"
+            },
+            {
+              "name": "key",
+              "value": "f57aded3-01cf-491c-8009-efb16bf68f96"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        624,
+        0
+      ],
+      "id": "7c1d4b04-0f2d-48bd-bb3d-72c43c581391",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Code in JavaScript2').first().json;\nconst items = Array.isArray($json.result?.items) ? $json.result.items : [];\n\nconst normalize = (value) => String(value ?? '').toLowerCase().trim();\nconst toText = (value) => {\n  const text = String(value ?? '').trim();\n  return text === '' ? null : text;\n};\nconst unique = (values) => [...new Set(values.filter(Boolean))];\n\nconst weekdays = [\n  ['Mon', 'Пн'],\n  ['Tue', 'Вт'],\n  ['Wed', 'Ср'],\n  ['Thu', 'Чт'],\n  ['Fri', 'Пт'],\n  ['Sat', 'Сб'],\n  ['Sun', 'Вс']\n];\n\nconst rubricNames = (item) => Array.isArray(item.rubrics)\n  ? item.rubrics.map((rubric) => String(rubric?.name || '').trim()).filter(Boolean)\n  : [];\n\nconst rubricText = (item) => rubricNames(item).map(normalize).join(' ');\n\nconst formatSchedule = (schedule) => {\n  if (!schedule || typeof schedule !== 'object') return null;\n  if (schedule.is_24x7) return 'Круглосуточно';\n\n  const parts = [];\n  for (const [key, label] of weekdays) {\n    const day = schedule[key];\n    const ranges = Array.isArray(day?.working_hours)\n      ? day.working_hours\n          .map((slot) => {\n            const from = String(slot?.from || '').trim();\n            const to = String(slot?.to || '').trim();\n            return from && to ? `${from}-${to}` : null;\n          })\n          .filter(Boolean)\n      : [];\n\n    if (ranges.length > 0) {\n      parts.push(`${label} ${ranges.join(', ')}`);\n    }\n  }\n\n  const comment = toText(schedule.comment);\n  return toText([...parts, comment].filter(Boolean).join('; '));\n};\n\nconst extractImageUrl = (item) => {\n  const external = item.external_content;\n  if (external && typeof external === 'object') {\n    if (Array.isArray(external.photos) && external.photos.length > 0) {\n      return toText(external.photos[0]?.url || external.photos[0]?.preview_url);\n    }\n    return toText(external.main_photo_url || external.photo_url);\n  }\n  return null;\n};\n\nconst extractDescription = (item) => {\n  return toText(\n    item.description || [item.purpose_name, item.address_comment, ...rubricNames(item).slice(0, 3)].filter(Boolean).join(' • ')\n  );\n};\n\nconst extractRating = (item) => {\n  const rating = Number(item.reviews?.general_rating);\n  return Number.isFinite(rating) && rating > 0 ? Number(rating.toFixed(2)) : null;\n};\n\nconst extractAvgBill = (item) => {\n  const groups = Array.isArray(item.attribute_groups) ? item.attribute_groups : [];\n  for (const group of groups) {\n    const attributes = Array.isArray(group?.attributes) ? group.attributes : [];\n    for (const attribute of attributes) {\n      const text = toText(attribute?.name || attribute?.value || attribute?.text);\n      const tag = normalize(attribute?.tag);\n      if (text && /(средн|avg|average).*(чек|bill|price)|^(от )?\\d+[ ₽р]/iu.test(text)) {\n        return text;\n      }\n      if (text && tag.includes('avg_bill')) {\n        return text;\n      }\n    }\n  }\n  return null;\n};\n\nconst extractCuisine = (item) => {\n  const names = rubricNames(item);\n  const cuisines = names.filter((name) => /кухн|grill|барбекю|пицц|суши|азиат|кавказ|грузин|итальян|европ|япон|узбек|корей|стейк|бург/i.test(name));\n  return toText(unique(cuisines).join(', '));\n};\n\nconst extractContacts = (item) => {\n  const groups = Array.isArray(item.contact_groups) ? item.contact_groups : [];\n  const contacts = [];\n  for (const group of groups) {\n    for (const contact of Array.isArray(group?.contacts) ? group.contacts : []) {\n      const text = toText(contact?.text || contact?.value || contact?.url || contact?.print_text);\n      if (text) contacts.push(text);\n    }\n  }\n  return toText(unique(contacts).join(', '));\n};\n\nconst ranked = items\n  .filter((item) => item && item.type === 'branch')\n  .map((item) => {\n    const name = toText(item.name);\n    const address = toText(item.full_name || item.address_name);\n    const text = [\n      item.name,\n      item.full_name,\n      item.address_name,\n      item.address_comment,\n      item.purpose_name,\n      item.description,\n      item.type,\n      rubricText(item)\n    ].map(normalize).join(' ');\n\n    let score = 0;\n    if (/аренда коттеджей|коттедж|домик|дом\\s*отдыха|гостев(ой)?\\s*дом|шале|вилл/iu.test(text)) score += 14;\n    if (/база\\s*отдыха|турбаза|глэмпинг/iu.test(text)) score += 10;\n    if (/банкет|мероприяти|праздник|день\\s*рождения/iu.test(text)) score += 5;\n    if (/мангал|барбекю|беседк/iu.test(text)) score += 4;\n    if (/баня|сауна/iu.test(text)) score += 3;\n    if (extractRating(item) !== null) score += 2;\n\n    const sameAsCity = normalize(name) === input.city_normalized && normalize(address) === input.city_normalized;\n    return {\n      item,\n      name,\n      address,\n      score,\n      sameAsCity\n    };\n  })\n  .filter((entry) => !entry.sameAsCity && entry.name);\n\nconst sorted = ranked.sort((a, b) => b.score - a.score || String(a.name || '').localeCompare(String(b.name || ''), 'ru'));\nconst preferred = sorted.filter((entry) => entry.score >= 8);\nconst selected = (preferred.length > 0 ? preferred : sorted).slice(0, 10);\n\nconst dedup = new Set();\nconst venues = [];\nfor (const { item, name, address } of selected) {\n  const key = `${normalize(name)}|${normalize(address)}`;\n  if (dedup.has(key)) continue;\n  dedup.add(key);\n\n  venues.push({\n    id: item.id || null,\n    name,\n    image_url: extractImageUrl(item),\n    description: extractDescription(item),\n    rating: extractRating(item),\n    address,\n    address_name: toText(item.address_name),\n    address_comment: toText(item.address_comment),\n    working_hours: formatSchedule(item.schedule),\n    avg_bill: extractAvgBill(item),\n    cuisine: extractCuisine(item),\n    contacts: extractContacts(item),\n    purpose_name: toText(item.purpose_name),\n    type: toText(item.type)\n  });\n}\n\nreturn [\n  {\n    json: {\n      total: venues.length,\n      venues,\n      debug: {\n        original_total: $json.result?.total || 0,\n        query_2gis: input.query_2gis,\n        housing_terms: input.housing_terms,\n        occasion_terms: input.occasion_terms,\n        feature_terms: input.feature_terms\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "559c3494-d4f3-4744-8f2a-ff7f6883f2dd",
+      "name": "Code in JavaScript3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4ae3de34-3512-46d3-8338-58d810373361",
+  "meta": {
+    "instanceId": "658b56d0c94fe802dc11b19bd6edfa7333fedf432aa4dce78f205afedfefee04"
+  },
+  "id": "Q49J2Otxz8sUxo59",
+  "tags": []
+}
