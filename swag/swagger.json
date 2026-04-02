@@ -1749,10 +1749,19 @@
                 "ai_score": {
                     "type": "string"
                 },
+                "avg_bill": {
+                    "type": "string"
+                },
                 "contacts": {
                     "type": "string"
                 },
                 "created_at": {
+                    "type": "string"
+                },
+                "cuisine": {
+                    "type": "string"
+                },
+                "description": {
                     "type": "string"
                 },
                 "event_id": {
@@ -1761,8 +1770,14 @@
                 "id": {
                     "type": "string"
                 },
+                "image_url": {
+                    "type": "string"
+                },
                 "is_rejected": {
                     "type": "boolean"
+                },
+                "rating": {
+                    "type": "string"
                 },
                 "rejected_at": {
                     "type": "string"
@@ -1780,6 +1795,9 @@
                     "type": "string"
                 },
                 "variant_id": {
+                    "type": "string"
+                },
+                "working_hours": {
                     "type": "string"
                 }
             }
