@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
 
 	"eventAI/internal/entities/core"
@@ -144,6 +146,211 @@ func TestEventServiceCreateInfersPointSearchEventType(t *testing.T) {
 
 	if generator.lastRequest.Event != "день рождения" {
 		t.Fatalf("event = %q, want день рождения", generator.lastRequest.Event)
+	}
+}
+
+func TestEventServiceCreateTreatsZeroEnergyAsUnspecified(t *testing.T) {
+	t.Parallel()
+
+	repository := &stubEventRepository{
+		createResult: core.Event{ID: "event-1", Status: core.EventStatusGenerating},
+	}
+	generator := &stubEventGenerator{
+		pointSearchResult: n8n.PointSearchResponse{
+			Total: 1,
+			Venues: []n8n.PointSearchVenue{
+				{Name: stringPtr("Фрея холл"), Address: stringPtr("Якутск, Сергеляхское шоссе 9 километр, 31")},
+			},
+		},
+	}
+	service := NewEventService(repository, generator)
+
+	_, err := service.Create(context.Background(), "user-1", CreateEventInput{
+		City:   "якутск",
+		Date:   "2099-06-01",
+		Time:   "15:00",
+		Scale:  10,
+		Energy: "0",
+		Budget: "50000",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if generator.lastRequest.Event != "мероприятие" {
+		t.Fatalf("event = %q, want мероприятие", generator.lastRequest.Event)
+	}
+	if len(generator.lastRequest.Preferences) != 0 {
+		t.Fatalf("preferences = %#v, want empty", generator.lastRequest.Preferences)
+	}
+}
+
+func TestEventServiceCreateReturnsServiceUnavailableWhenNoUsableLocations(t *testing.T) {
+	t.Parallel()
+
+	repository := &stubEventRepository{
+		createResult: core.Event{ID: "event-1", Status: core.EventStatusGenerating},
+	}
+	generator := &stubEventGenerator{
+		pointSearchResult: n8n.PointSearchResponse{
+			Total: 1,
+			Venues: []n8n.PointSearchVenue{
+				{Name: stringPtr("Якутск"), Address: stringPtr("Якутск")},
+			},
+		},
+	}
+	service := NewEventService(repository, generator)
+
+	_, err := service.Create(context.Background(), "user-1", CreateEventInput{
+		City:   "якутск",
+		Date:   "2099-06-01",
+		Time:   "15:00",
+		Scale:  10,
+		Energy: "0",
+		Budget: "50000",
+	})
+	if !errors.Is(err, errorsstatus.ErrServiceUnavailable) {
+		t.Fatalf("error = %v, want service unavailable", err)
+	}
+	if repository.lastFailGenerationReason != "point search returned no usable locations for event \"банкет\"" {
+		t.Fatalf("failure reason = %q, want no usable locations for fallback event", repository.lastFailGenerationReason)
+	}
+}
+
+func TestEventServiceCreateRetriesWithFallbackEventAfterGeneratorError(t *testing.T) {
+	t.Parallel()
+
+	repository := &stubEventRepository{
+		createResult: core.Event{ID: "event-1", Status: core.EventStatusGenerating},
+	}
+	generator := &stubEventGenerator{
+		perEventErr: map[string]error{
+			"день рождения": errors.New("workflow error"),
+		},
+		perEventResult: map[string]n8n.PointSearchResponse{
+			"банкет": {
+				Total: 1,
+				Venues: []n8n.PointSearchVenue{
+					{Name: stringPtr("Фрея холл"), Address: stringPtr("Якутск, Сергеляхское шоссе 9 километр, 31")},
+				},
+			},
+		},
+	}
+	service := NewEventService(repository, generator)
+
+	_, err := service.Create(context.Background(), "user-1", CreateEventInput{
+		City:   "Якутск",
+		Date:   "2099-06-01",
+		Time:   "15:00",
+		Scale:  10,
+		Energy: "день рождения",
+		Budget: "50000",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if len(generator.requests) != 2 {
+		t.Fatalf("request count = %d, want 2", len(generator.requests))
+	}
+	if generator.requests[0].Event != "день рождения" || generator.requests[1].Event != "банкет" {
+		t.Fatalf("events = %#v, want [\"день рождения\", \"банкет\"]", []string{generator.requests[0].Event, generator.requests[1].Event})
+	}
+}
+
+func TestEventServiceCreateRetriesWithFallbackEventAfterUnusableVenues(t *testing.T) {
+	t.Parallel()
+
+	repository := &stubEventRepository{
+		createResult: core.Event{ID: "event-1", Status: core.EventStatusGenerating},
+	}
+	generator := &stubEventGenerator{
+		perRequestResult: map[string]n8n.PointSearchResponse{
+			pointSearchRequestKey("мероприятие", nil): {
+				Total: 1,
+				Venues: []n8n.PointSearchVenue{
+					{Name: stringPtr("Якутск"), Address: stringPtr("Якутск")},
+				},
+			},
+			pointSearchRequestKey("банкет", []string{"ресторан", "банкетный зал"}): {
+				Total: 1,
+				Venues: []n8n.PointSearchVenue{
+					{Name: stringPtr("Фрея холл"), Address: stringPtr("Якутск, Сергеляхское шоссе 9 километр, 31")},
+				},
+			},
+		},
+	}
+	service := NewEventService(repository, generator)
+
+	_, err := service.Create(context.Background(), "user-1", CreateEventInput{
+		City:   "Якутск",
+		Date:   "2099-06-01",
+		Time:   "15:00",
+		Scale:  10,
+		Energy: "0",
+		Budget: "50000",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if len(generator.requests) != 4 {
+		t.Fatalf("request count = %d, want 4", len(generator.requests))
+	}
+	events := []string{generator.requests[0].Event, generator.requests[1].Event, generator.requests[2].Event, generator.requests[3].Event}
+	if !reflect.DeepEqual(events, []string{"мероприятие", "банкет", "корпоратив", "банкет"}) {
+		t.Fatalf("events = %#v, want [\"мероприятие\", \"банкет\", \"корпоратив\", \"банкет\"]", events)
+	}
+	if len(generator.requests[3].Preferences) != 2 || generator.requests[3].Preferences[0] != "ресторан" || generator.requests[3].Preferences[1] != "банкетный зал" {
+		t.Fatalf("fallback preferences = %#v, want restaurant fallback", generator.requests[3].Preferences)
+	}
+}
+
+func TestEventServiceCreateRetriesWithHousingFallbackPreferences(t *testing.T) {
+	t.Parallel()
+
+	repository := &stubEventRepository{
+		createResult: core.Event{ID: "event-1", Status: core.EventStatusGenerating},
+	}
+	generator := &stubEventGenerator{
+		perRequestResult: map[string]n8n.PointSearchResponse{
+			pointSearchRequestKey("день рождения", []string{"день рождения, хочу снять домик с мангалом"}): {
+				Total: 1,
+				Venues: []n8n.PointSearchVenue{
+					{Name: stringPtr("Якутск"), Address: stringPtr("Якутск")},
+				},
+			},
+			pointSearchRequestKey("банкет", []string{"коттедж", "аренда дома", "мангал"}): {
+				Total: 1,
+				Venues: []n8n.PointSearchVenue{
+					{Name: stringPtr("Мега Барн, гостевой дом"), Address: stringPtr("Якутск, Старый Покровский тракт, 76")},
+				},
+			},
+		},
+	}
+	service := NewEventService(repository, generator)
+
+	_, err := service.Create(context.Background(), "user-1", CreateEventInput{
+		City:   "Якутск",
+		Date:   "2099-06-01",
+		Time:   "18:00",
+		Scale:  10,
+		Energy: "день рождения, хочу снять домик с мангалом",
+		Budget: "50000",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	if len(generator.requests) != 4 {
+		t.Fatalf("request count = %d, want 4", len(generator.requests))
+	}
+	last := generator.requests[len(generator.requests)-1]
+	if last.Event != "банкет" {
+		t.Fatalf("last event = %q, want банкет", last.Event)
+	}
+	if len(last.Preferences) != 3 || last.Preferences[0] != "коттедж" || last.Preferences[1] != "аренда дома" || last.Preferences[2] != "мангал" {
+		t.Fatalf("housing fallback preferences = %#v, want housing fallback", last.Preferences)
 	}
 }
 
@@ -482,13 +689,36 @@ type stubEventGenerator struct {
 	pointSearchResult n8n.PointSearchResponse
 	pointSearchErr    error
 	lastRequest       n8n.PointSearchRequest
+	requests          []n8n.PointSearchRequest
+	perEventResult    map[string]n8n.PointSearchResponse
+	perEventErr       map[string]error
+	perRequestResult  map[string]n8n.PointSearchResponse
+	perRequestErr     map[string]error
 }
 
 func (s *stubEventGenerator) PointSearch(_ context.Context, input n8n.PointSearchRequest) (n8n.PointSearchResponse, error) {
 	s.lastRequest = input
+	s.requests = append(s.requests, input)
+	key := pointSearchRequestKey(input.Event, input.Preferences)
+	if err, ok := s.perRequestErr[key]; ok {
+		return n8n.PointSearchResponse{}, err
+	}
+	if result, ok := s.perRequestResult[key]; ok {
+		return result, nil
+	}
+	if err, ok := s.perEventErr[input.Event]; ok {
+		return n8n.PointSearchResponse{}, err
+	}
+	if result, ok := s.perEventResult[input.Event]; ok {
+		return result, nil
+	}
 	return s.pointSearchResult, s.pointSearchErr
 }
 
 func stringPtr(value string) *string {
 	return &value
+}
+
+func pointSearchRequestKey(event string, preferences []string) string {
+	return event + "|" + strings.Join(preferences, "|")
 }

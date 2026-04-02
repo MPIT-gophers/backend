@@ -78,8 +78,8 @@ func (s *EventService) Create(ctx context.Context, userID string, input CreateEv
 		return core.Event{}, errorsstatus.ErrInvalidInput
 	}
 
-	energy := strings.TrimSpace(input.Energy)
-	if energy == "" || len([]rune(energy)) > 255 {
+	energy := normalizeEnergyInput(input.Energy)
+	if len([]rune(energy)) > 255 {
 		return core.Event{}, errorsstatus.ErrInvalidInput
 	}
 
@@ -114,18 +114,14 @@ func (s *EventService) Create(ctx context.Context, userID string, input CreateEv
 		return core.Event{}, err
 	}
 
-	pointSearchResponse, err := s.generator.PointSearch(ctx, n8n.PointSearchRequest{
-		Event: inferPointSearchEventType(energy),
-		City:  city,
-		Date:  eventDate.Format("2006-01-02"),
-		Time:  pointSearchTime,
-		Budget: n8n.PointSearchBudget{
-			Type:     defaultBudgetType,
-			Amount:   budgetAmount,
-			Currency: defaultBudgetCurrency,
-		},
+	pointSearchResponse, err := s.pointSearchWithFallback(ctx, pointSearchInput{
+		Event:        inferPointSearchEventType(energy),
+		City:         city,
+		Date:         eventDate.Format("2006-01-02"),
+		Time:         pointSearchTime,
+		BudgetAmount: budgetAmount,
 		Participants: input.Scale,
-		Preferences:  []string{energy},
+		Preferences:  buildPointSearchPreferences(energy),
 	})
 	if err != nil {
 		if updateErr := s.repo.FailGeneration(ctx, event.ID, err.Error()); updateErr != nil {
@@ -136,6 +132,13 @@ func (s *EventService) Create(ctx context.Context, userID string, input CreateEv
 	}
 
 	generatedVariant := buildGeneratedVariant(city, energy, input.Scale, pointSearchTime, pointSearchResponse)
+	if len(generatedVariant.Locations) == 0 {
+		const reason = "point search returned no usable locations"
+		if failErr := s.repo.FailGeneration(ctx, event.ID, reason); failErr != nil {
+			return core.Event{}, failErr
+		}
+		return core.Event{}, fmt.Errorf("%w: %s", errorsstatus.ErrServiceUnavailable, reason)
+	}
 	if err := s.repo.SaveGeneratedVariant(ctx, event.ID, generatedVariant); err != nil {
 		if failErr := s.repo.FailGeneration(ctx, event.ID, err.Error()); failErr != nil {
 			return core.Event{}, failErr
@@ -333,6 +336,198 @@ func inferPointSearchEventType(value string) string {
 	default:
 		return defaultPointSearchEventType
 	}
+}
+
+func normalizeEnergyInput(value string) string {
+	normalized := strings.TrimSpace(value)
+	switch strings.ToLower(normalized) {
+	case "", "0", "null", "none", "any", "неважно", "без предпочтений":
+		return ""
+	default:
+		return normalized
+	}
+}
+
+func buildPointSearchPreferences(energy string) []string {
+	if energy == "" {
+		return nil
+	}
+
+	return []string{energy}
+}
+
+type pointSearchInput struct {
+	Event        string
+	City         string
+	Date         string
+	Time         string
+	BudgetAmount float64
+	Participants int
+	Preferences  []string
+}
+
+func (s *EventService) pointSearchWithFallback(ctx context.Context, input pointSearchInput) (n8n.PointSearchResponse, error) {
+	candidates := pointSearchRequestCandidates(input)
+	var lastErr error
+
+	for _, candidate := range candidates {
+		response, err := s.generator.PointSearch(ctx, n8n.PointSearchRequest{
+			Event: candidate.Event,
+			City:  input.City,
+			Date:  input.Date,
+			Time:  input.Time,
+			Budget: n8n.PointSearchBudget{
+				Type:     defaultBudgetType,
+				Amount:   input.BudgetAmount,
+				Currency: defaultBudgetCurrency,
+			},
+			Participants: input.Participants,
+			Preferences:  candidate.Preferences,
+		})
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		if hasUsablePointSearchVenues(input.City, response) {
+			return response, nil
+		}
+
+		lastErr = fmt.Errorf("point search returned no usable locations for event %q", candidate.Event)
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("point search returned no usable locations")
+	}
+
+	return n8n.PointSearchResponse{}, lastErr
+}
+
+type pointSearchCandidate struct {
+	Event       string
+	Preferences []string
+}
+
+func pointSearchRequestCandidates(input pointSearchInput) []pointSearchCandidate {
+	basePreferences := cloneStrings(input.Preferences)
+	candidates := []pointSearchCandidate{{
+		Event:       strings.TrimSpace(input.Event),
+		Preferences: basePreferences,
+	}}
+
+	switch strings.TrimSpace(input.Event) {
+	case "день рождения", "свадьба", "девичник", "мальчишник", "выпускной", "свидание":
+		candidates = append(candidates,
+			pointSearchCandidate{Event: "банкет", Preferences: basePreferences},
+			pointSearchCandidate{Event: "корпоратив", Preferences: basePreferences},
+		)
+	case "деловое мероприятие":
+		candidates = append(candidates,
+			pointSearchCandidate{Event: "корпоратив", Preferences: basePreferences},
+			pointSearchCandidate{Event: "банкет", Preferences: basePreferences},
+		)
+	case "мероприятие":
+		candidates = append(candidates,
+			pointSearchCandidate{Event: "банкет", Preferences: basePreferences},
+			pointSearchCandidate{Event: "корпоратив", Preferences: basePreferences},
+		)
+	case "банкет":
+		candidates = append(candidates,
+			pointSearchCandidate{Event: "корпоратив", Preferences: basePreferences},
+		)
+	case "корпоратив":
+		candidates = append(candidates,
+			pointSearchCandidate{Event: "банкет", Preferences: basePreferences},
+		)
+	default:
+		candidates = append(candidates,
+			pointSearchCandidate{Event: "банкет", Preferences: basePreferences},
+			pointSearchCandidate{Event: "корпоратив", Preferences: basePreferences},
+		)
+	}
+
+	if hasHousingIntent(basePreferences) {
+		candidates = append(candidates, pointSearchCandidate{
+			Event:       "банкет",
+			Preferences: []string{"коттедж", "аренда дома", "мангал"},
+		})
+	} else {
+		candidates = append(candidates,
+			pointSearchCandidate{
+				Event:       "банкет",
+				Preferences: []string{"ресторан", "банкетный зал"},
+			},
+			pointSearchCandidate{
+				Event:       "банкет",
+				Preferences: []string{"кафе", "ресторан"},
+			},
+		)
+	}
+
+	seen := make(map[string]struct{}, len(candidates))
+	result := make([]pointSearchCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidate.Event = strings.TrimSpace(candidate.Event)
+		candidate.Preferences = normalizePreferenceList(candidate.Preferences)
+		if candidate.Event == "" {
+			continue
+		}
+		key := candidate.Event + "\n" + strings.Join(candidate.Preferences, "\n")
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, candidate)
+	}
+
+	return result
+}
+
+func hasUsablePointSearchVenues(city string, response n8n.PointSearchResponse) bool {
+	for i, venue := range response.Venues {
+		if buildGeneratedLocation(city, i, venue) != nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+func normalizePreferenceList(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+
+	return result
+}
+
+func cloneStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	out := make([]string, len(values))
+	copy(out, values)
+	return out
+}
+
+func hasHousingIntent(preferences []string) bool {
+	text := strings.ToLower(strings.Join(preferences, " "))
+	return containsAny(text, "дом", "домик", "коттедж", "гостевой дом", "шале", "вилл", "аренда дома", "база отдыха", "турбаза", "глэмпинг", "мангал")
 }
 
 func buildGeneratedVariant(city, energy string, scale int, timeValue string, response n8n.PointSearchResponse) repo.GeneratedEventVariant {
